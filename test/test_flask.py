@@ -1,0 +1,112 @@
+from unittest.mock import patch
+
+import pytest
+import flask
+
+from thunderstorm.flask import (
+    deprecated,
+    rewrite_path_with_header
+)
+
+
+@pytest.fixture
+def flask_app():
+    app = flask.Flask('test_app')
+
+    @app.route('/past')
+    @deprecated(deadline='2012-12-12')
+    def past():
+        return 'ok'
+
+    @app.route('/future')
+    @deprecated(deadline='2050-05-05')
+    def future():
+        return 'ok'
+
+    @app.route('/none')
+    @deprecated
+    def none():
+        return 'ok'
+
+    return app
+
+
+@patch('thunderstorm.flask.logger')
+def test_deprecated_before_deadline(mock_logger, flask_app):
+    resp = flask_app.test_client().get('/future')
+
+    assert mock_logger.warning.called
+    assert not mock_logger.error.called
+    assert resp.headers['Warning'] == (
+        '299 - "Deprecated route, '
+        'will be maintained until 2050-05-05T00:00:00"'
+    )
+
+
+@patch('thunderstorm.flask.logger')
+def test_deprecated_after_deadline(mock_logger, flask_app):
+    resp = flask_app.test_client().get('/past')
+
+    assert not mock_logger.warning.called
+    assert mock_logger.error.called
+    assert resp.headers['Warning'] == (
+        '299 - "Deprecated route, '
+        'will be maintained until 2012-12-12T00:00:00"'
+    )
+
+
+@patch('thunderstorm.flask.logger')
+def test_deprecated_no_deadline(mock_logger, flask_app):
+    resp = flask_app.test_client().get('/none')
+
+    assert mock_logger.warning.called
+    assert not mock_logger.error.called
+    assert resp.headers['Warning'] == (
+        '299 - "Deprecated route"'
+    )
+
+
+@pytest.mark.parametrize('path,header,new_path', [
+    (  # chops common suffix
+        '/api/v3/device/dc9c0e76-3d99-11e8-8752-33401e43ad3b',
+        'type=prefix; source=/api/v1/screen; target=/api/v3/screen',
+        '/api/v1/device/dc9c0e76-3d99-11e8-8752-33401e43ad3b',
+    ),
+    (
+        '/api/v3/device/dc9c0e76-3d99-11e8-8752-33401e43ad3b',
+        'type=prefix; source=/api/v1; target=/api/v3',
+        '/api/v1/device/dc9c0e76-3d99-11e8-8752-33401e43ad3b',
+    ),
+    (
+        '/foo/bar',
+        'type=transparent; source=/other/invalid; target=invalid/foo',
+        '/foo/bar',
+    ),
+    (
+        '/foo/bar',
+        'type=static; source=/other/source; target=invalid/foo',
+        '/other/source'
+    ),
+    (
+        '/foo/bar',
+        'type=invalid',
+        '/foo/bar',
+    ),
+    (
+        '/foo/bar',
+        'adnao',
+        '/foo/bar',
+    ),
+    (
+        '/foo/bar',
+        'type=prefix',
+        '/foo/bar',
+    ),
+    (
+        '/foo/bar',
+        'type=prefix; source=/other/source; target=/other/prefix',
+        '/foo/bar',
+    )
+])
+def test_rewrite_path_with_header(path, header, new_path):
+    assert rewrite_path_with_header(path, header) == new_path
