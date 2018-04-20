@@ -1,0 +1,23 @@
+version: '2'
+
+services:
+  python34:
+    image: "${REGISTRY}/artsalliancemedia/python:3.4"
+    command: make test
+    working_dir: /var/app
+    volumes:
+      - ./:/var/app
+
+  python35:
+    image: "${REGISTRY}/artsalliancemedia/python:3.5"
+    command: make test
+    working_dir: /var/app
+    volumes:
+      - ./:/var/app
+
+  python36:
+    image: "${REGISTRY}/artsalliancemedia/python:3.6"
+    command: make test
+    working_dir: /var/app
+    volumes:
+      - ./:/var/app
