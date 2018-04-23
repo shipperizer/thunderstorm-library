@@ -1,0 +1,10 @@
+---
+ duplication:
+   enabled: true
+   exclude_paths:
+     - test/**
+
+ coverage:
+   enabled: true
+   exclude_paths:
+     - test/**
