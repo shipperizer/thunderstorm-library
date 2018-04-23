@@ -1,6 +1,7 @@
 # Thunderstorm Library
 
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/d55a251ae0fa4511af518cd994e034c7)](https://www.codacy.com/app/AAM/thunderstorm-auth-library?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=artsalliancemedia/thunderstorm-auth-library&amp;utm_campaign=Badge_Grade)
+[![Build Status](https://ts-jenkins.aamts.io/buildStatus/icon?job=AAM/thunderstorm-library/master)](https://ts-jenkins.aamts.io/job/AAM/thunderstorm-library/master)
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/437721a3b0f64ec2b648fd34af053b53)](https://www.codacy.com?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=artsalliancemedia/thunderstorm-library&amp;utm_campaign=Badge_Grade)
 [![Codacy Badge](https://api.codacy.com/project/badge/Coverage/d55a251ae0fa4511af518cd994e034c7)](https://www.codacy.com/app/AAM/thunderstorm-auth-library?utm_source=github.com&utm_medium=referral&utm_content=artsalliancemedia/thunderstorm-auth-library&utm_campaign=Badge_Coverage)
 
 **Note: This is a public repo**
