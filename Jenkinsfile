@@ -26,19 +26,19 @@ node('aam-identity-prodcd') {
 
     try {
         def registry = '886366864302.dkr.ecr.eu-west-1.amazonaws.com'
-        // CODACY_PROJECT_TS_AUTH_LIB_TOKEN is a global set in jenkins
+        // CODACY_PROJECT_TS_LIB_TOKEN is a global set in jenkins
         stage('Test') {
             withEnv([
               "REGISTRY=${registry}"
             ]) {
               parallel 'python34': {
-                sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=34 python34 make codacy"
+                sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=34 python34 make install test codacy"
                 junit 'results-34.xml'
               }, 'python35': {
-                sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=35 python35 make codacy"
+                sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=35 python35 make install test codacy"
                 junit 'results-35.xml'
               }, 'python36': {
-                sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=36 python36 make codacy"
+                sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=36 python36 make install test codacy"
                 junit 'results-36.xml'
               }
             }

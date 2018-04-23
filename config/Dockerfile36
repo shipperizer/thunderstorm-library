@@ -2,14 +2,10 @@ FROM python:3.6-slim
 
 WORKDIR /var/app
 
-COPY . .
-
 # Install make, git etc
 RUN apt-get update \
     && apt-get -y --no-install-recommends install make git \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
-
-RUN make requirements
 
 CMD ["bash"]

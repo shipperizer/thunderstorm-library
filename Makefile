@@ -1,17 +1,17 @@
-.PHONY: requirements lint test build clean dist release codacy
+.PHONY: install lint test build clean dist release codacy
 
 CODACY_PROJECT_TOKEN?=fake
 PYTHON_VERSION?=default
 REGISTRY?=docker.io
 
-requirements:
+install:
 	pip install -r requirements.txt
 	pip install -r requirements-dev.txt
 
 lint:
 	flake8 thunderstorm test
 
-test: requirements lint
+test: lint
 	pytest \
 		--cov thunderstorm \
 		--cov-report xml \
@@ -43,15 +43,20 @@ release: dist
 		--name thunderstorm-library-$$(python setup.py --version).tar.gz \
 		--file dist/thunderstorm-library-$$(python setup.py --version).tar.gz
 
-codacy: test
+codacy:
 	python-codacy-coverage -r coverage.xml
 
 
 python34:
-	docker build --tag $REGISTRY/artsalliancemedia/python:3.4 -f config/Dockerfile34 .
+	docker build --tag ${REGISTRY}/artsalliancemedia/python:3.4-slim -f config/Dockerfile34 .
 
 python35:
-	docker build --tag $REGISTRY/artsalliancemedia/python:3.5 -f config/Dockerfile35 .
+	docker build --tag ${REGISTRY}/artsalliancemedia/python:3.5-slim -f config/Dockerfile35 .
 
 python36:
-	docker build --tag $REGISTRY/artsalliancemedia/python:3.6 -f config/Dockerfile36 .
+	docker build --tag ${REGISTRY}/artsalliancemedia/python:3.6-slim -f config/Dockerfile36 .
+
+push:
+	docker push ${REGISTRY}/artsalliancemedia/python:3.4-slim
+	docker push ${REGISTRY}/artsalliancemedia/python:3.5-slim
+	docker push ${REGISTRY}/artsalliancemedia/python:3.6-slim
