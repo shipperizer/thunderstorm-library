@@ -1,5 +1,8 @@
 #!/usr/bin/env groovy
 
+def user = 'artsalliancemedia'
+def repo = 'thunderstorm-library'
+
 node('aam-identity-prodcd') {
     properties([
         [
@@ -54,14 +57,22 @@ node('aam-identity-prodcd') {
             stage('Create Github Release') {
 
                 if (is_release == 0) {
-                    // extract application version
-                    def version = sh (script: 'python setup.py --version', returnStdout: true)
-
+                  // extract application version
+                  def version = sh (script: 'python setup.py --version', returnStdout: true)
+                  version = version.trim()
                   // GITHUB_TOKEN is a global set in jenkins
                   withEnv([
                       "GITHUB_TOKEN=${env.GITHUB_TOKEN}",
                   ]) {
-                      sh "make release"
+                    // create distribution
+                    sh "make dist"
+                    sh """
+                        git remote set-url origin git@github.com:artsalliancemedia/thunderstorm-library.git
+                        git tag -f v${version}
+                        git push --tags
+                        github-release release -u ${user} -r ${repo} -t v${version}
+                        github-release upload -u '${user}' -r '${repo}' -t 'v${version}' -n 'thunderstorm-library-${version}.tar.gz' -f 'dist/thunderstorm-library-${version}.tar.gz'
+                    """
                   }
               } else {
                   echo 'No [release] commit -- skipping'

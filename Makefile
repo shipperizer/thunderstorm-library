@@ -3,6 +3,7 @@
 CODACY_PROJECT_TOKEN?=fake
 PYTHON_VERSION?=default
 REGISTRY?=docker.io
+VERSION?=0.0.0
 
 install:
 	pip install -r requirements.txt
@@ -29,19 +30,18 @@ dist: clean
 	python setup.py sdist
 
 release: dist
-	git tag v$$(python setup.py --version)
-	git push --tags
+	git tag v$(VERSION)
+	git push --repo git@github.com:artsalliancemedia/thunderstorm-library.git --tags
 	github-release release \
 		--user artsalliancemedia \
 		--repo thunderstorm-library \
-		--tag v$$(python setup.py --version) \
-		--pre-release
+		--tag v$(VERSION) \
 	github-release upload \
+		--name thunderstorm-library-$(VERSION).tar.gz \
 		--user artsalliancemedia \
 		--repo thunderstorm-library \
-		--tag v$$(python setup.py --version) \
-		--name thunderstorm-library-$$(python setup.py --version).tar.gz \
-		--file dist/thunderstorm-library-$$(python setup.py --version).tar.gz
+		--tag v$(VERSION) \
+		--file dist/thunderstorm-library-$(VERSION).tar.gz
 
 codacy:
 	python-codacy-coverage -r coverage.xml
