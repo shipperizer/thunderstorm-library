@@ -1,4 +1,4 @@
-.PHONY: install lint test build clean dist release codacy
+.PHONY: install lint test build clean dist codacy
 
 CODACY_PROJECT_TOKEN?=fake
 PYTHON_VERSION?=default
@@ -28,20 +28,6 @@ clean:
 
 dist: clean
 	python setup.py sdist
-
-release: dist
-	git tag v$(VERSION)
-	git push --repo git@github.com:artsalliancemedia/thunderstorm-library.git --tags
-	github-release release \
-		--user artsalliancemedia \
-		--repo thunderstorm-library \
-		--tag v$(VERSION) \
-	github-release upload \
-		--name thunderstorm-library-$(VERSION).tar.gz \
-		--user artsalliancemedia \
-		--repo thunderstorm-library \
-		--tag v$(VERSION) \
-		--file dist/thunderstorm-library-$(VERSION).tar.gz
 
 codacy:
 	python-codacy-coverage -r coverage.xml
