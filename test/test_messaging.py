@@ -28,13 +28,12 @@ class FooSchema(Schema):
 
 
 @patch('thunderstorm.messaging.shared_task')
-def test_ts_task(mock_shared_task):
+def test_ts_task_calls_shared_task(mock_shared_task):
     # act
     @ts_task('foo.bar', schema=FooSchema)
     def my_task(message):
-        assert message == {'foo': 'bar'}
-        assert message.meta == {'request_id': 123}
-        assert message.data == {'foo': 'bar'}
+        # since shared_task is patched the body of this task is never called
+        pass
 
     # act
     my_task({'data': {'foo': 'bar'}, 'request_id': 123})
