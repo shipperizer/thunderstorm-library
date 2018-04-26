@@ -61,7 +61,7 @@ def ts_task(event_name, schema):
         def task_handler(message):
             ts_message = TSMessage(message.pop('data'), message)
 
-            errors = schema.load(ts_message).errors
+            deserialized_data, errors = schema.load(ts_message)
             if errors:
                 statsd.incr('tasks.{}.ts_task.errors.schema'.format(task_name))
                 error_msg = 'inbound schema validation error for event {}'.format(event_name)  # noqa
@@ -71,6 +71,7 @@ def ts_task(event_name, schema):
                 )
                 raise SchemaError(error_msg, errors=errors, data=ts_message)
             else:
+                ts_message.data = deserialized_data
                 return task_func(ts_message)
 
         return shared_task(name=task_name)(task_handler)
