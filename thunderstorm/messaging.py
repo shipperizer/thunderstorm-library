@@ -51,9 +51,17 @@ def ts_task(event_name, schema):
 
     See: ts_task_name
 
+    Example:
+        @ts_task('domain.action.request', schema=DomainActionRequestSchema())
+        def handle_domain_action_request(message):
+            # do something with validated message
+
     Args:
         event_name (str): The event name (this is also the routing key)
         schema (marshmallow.Schema): The schema instance expected by this task
+
+    Returns:
+        A decorator function
     """
     def decorator(task_func):
         task_name = ts_task_name(event_name)
@@ -91,6 +99,12 @@ def send_ts_task(event_name, schema, data):
 
     The correct task name is derived from the event name.
 
+    Example:
+        send_ts_task(
+            'domain.action.request', DomainActionRequestSchema(),
+            payload
+        )
+
     Args:
         event_name (str): The event name (this is also the routing key)
         schema (marshmallow.Schema): The schema instance the payload must
@@ -107,7 +121,7 @@ def send_ts_task(event_name, schema, data):
     errors = schema.load(data).errors
     if errors:
         statsd.incr('tasks.{}.send_ts_task.errors.schema'.format(task_name))
-        error_msg = 'outbound schema validation error for event {}'.format(event_name)
+        error_msg = 'outbound schema validation error for event {}'.format(event_name)  # noqa
         logger.error(error_msg, extra={'errors': errors, 'data': data})
 
         raise SchemaError(error_msg, errors=errors, data=data)
