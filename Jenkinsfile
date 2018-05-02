@@ -58,8 +58,8 @@ node('aam-identity-prodcd') {
 
                 if (is_release == 0) {
                   // extract application version
-                  def version = sh (script: 'python setup.py --version', returnStdout: true)
-                  version = version.trim()
+                  def version = sh (script: 'python setup.py --version', returnStdout: true).trim()
+                  def prDetails = getLatestPRDetails()
                   // GITHUB_TOKEN is a global set in jenkins
                   withEnv([
                       "GITHUB_TOKEN=${env.GITHUB_TOKEN}",
@@ -70,7 +70,9 @@ node('aam-identity-prodcd') {
                         git remote set-url origin git@github.com:artsalliancemedia/thunderstorm-library.git
                         git tag -f v${version}
                         git push --tags
-                        github-release release -u ${user} -r ${repo} -t v${version}
+                        cat << EOF | github-release release -u ${user} -r ${repo} -t v${version} -d -
+                        ${prDetails.body}
+                        EOF
                         github-release upload -u '${user}' -r '${repo}' -t 'v${version}' -n 'thunderstorm-library-${version}.tar.gz' -f 'dist/thunderstorm-library-${version}.tar.gz'
                     """
                   }
@@ -88,4 +90,25 @@ node('aam-identity-prodcd') {
     } finally {
         sh 'docker-compose down'
     }
+}
+
+def getLatestPRNumber() {
+    return sh(
+        script: "git log --merges -1 | grep -Eo '#[0-9]+' | sed 's/#//g'",
+        returnStdout: true
+    ).trim()
+}
+
+def getLatestPRDetails() {
+    def prNumber = getLatestPRDetails()
+    def url = "https://api.github.com/repos/${user}/${repo}/pulls/${prNumber}"
+    def prJSON = sh(
+        script: "curl -H 'Authorization: token ${GITHUB_TOKEN}' ${url} | jq -c '{title: .title, body: .body}'",
+        returnStdout: true
+    )
+    def prMap = [
+        title: sh(script: "echo '${prJSON}' | jq -r '.title'", returnStdout: true),
+        body: sh(script: "echo '${prJSON}' | jq -r '.body'", returnStdout: true),
+    ]
+    return prMap
 }
