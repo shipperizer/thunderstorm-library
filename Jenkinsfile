@@ -103,12 +103,23 @@ def getLatestPRDetails() {
     def prNumber = getLatestPRNumber()
     def url = "https://api.github.com/repos/artsalliancemedia/thunderstorm-library/pulls/${prNumber}"
     def prJSON = sh(
-        script: "curl -H 'Authorization: token ${GITHUB_TOKEN}' ${url} | jq -c '{title: .title, body: .body}'",
+        script: "curl -H 'Authorization: token ${GITHUB_TOKEN}' ${url} | jq -c '{title: .title, body: .body}' | sed 's/EOF/xEOF/g'",
         returnStdout: true
     )
+    def getField = {
+        sh(
+            script: """
+                cat << 'EOF' | jq -r '.${it}'
+                ${prJSON}
+                EOF
+            """,
+            returnStdout: true
+        )
+    }
+
     def prMap = [
-        title: sh(script: "echo '${prJSON}' | jq -r '.title'", returnStdout: true),
-        body: sh(script: "echo '${prJSON}' | jq -r '.body'", returnStdout: true),
+        title: getField('title'),
+        body: getField('body'),
     ]
     return prMap
 }
