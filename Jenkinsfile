@@ -101,7 +101,7 @@ def getLatestPRNumber() {
 
 def getLatestPRDetails() {
     def prNumber = getLatestPRNumber()
-    def url = "https://api.github.com/repos/${user}/${repo}/pulls/${prNumber}"
+    def url = "https://api.github.com/repos/artsalliancemedia/thunderstorm-library/pulls/${prNumber}"
     def prJSON = sh(
         script: "curl -H 'Authorization: token ${GITHUB_TOKEN}' ${url} | jq -c '{title: .title, body: .body}'",
         returnStdout: true
