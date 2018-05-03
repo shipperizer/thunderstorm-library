@@ -57,24 +57,13 @@ node('aam-identity-prodcd') {
             stage('Create Github Release') {
 
                 if (is_release == 0) {
-                  // extract application version
-                  def version = sh (script: 'python setup.py --version', returnStdout: true).trim()
-                  def prDetails = getLatestPRDetails()
                   // GITHUB_TOKEN is a global set in jenkins
                   withEnv([
                       "GITHUB_TOKEN=${env.GITHUB_TOKEN}",
                   ]) {
                     // create distribution
                     sh "make dist"
-                    sh """
-                        git remote set-url origin git@github.com:artsalliancemedia/thunderstorm-library.git
-                        git tag -f v${version}
-                        git push --tags
-                        cat << EOF | github-release release -u ${user} -r ${repo} -t v${version} -d -
-                        ${prDetails.body}
-                        EOF
-                        github-release upload -u '${user}' -r '${repo}' -t 'v${version}' -n 'thunderstorm-library-${version}.tar.gz' -f 'dist/thunderstorm-library-${version}.tar.gz'
-                    """
+                    sh "./script/release.sh '${user}' '${repo}'"
                   }
               } else {
                   echo 'No [release] commit -- skipping'
@@ -90,36 +79,4 @@ node('aam-identity-prodcd') {
     } finally {
         sh 'docker-compose down'
     }
-}
-
-def getLatestPRNumber() {
-    return sh(
-        script: "git log --merges -1 | grep -Eo '#[0-9]+' | sed 's/#//g'",
-        returnStdout: true
-    ).trim()
-}
-
-def getLatestPRDetails() {
-    def prNumber = getLatestPRNumber()
-    def url = "https://api.github.com/repos/artsalliancemedia/thunderstorm-library/pulls/${prNumber}"
-    def prJSON = sh(
-        script: "curl -H 'Authorization: token ${GITHUB_TOKEN}' ${url} | jq -c '{title: .title, body: .body}' | sed 's/EOF/xEOF/g'",
-        returnStdout: true
-    )
-    def getField = {
-        sh(
-            script: """
-                cat << 'EOF' | jq -r '.${it}'
-                ${prJSON}
-                EOF
-            """,
-            returnStdout: true
-        )
-    }
-
-    def prMap = [
-        title: getField('title'),
-        body: getField('body'),
-    ]
-    return prMap
 }
