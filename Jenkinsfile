@@ -22,6 +22,7 @@ node('aam-identity-prodcd') {
         ]
     ])
 
+    def COMPOSE_PROJECT_NAME = getDockerComposeProject()
 
     stage('Checkout') {
         checkout scm
@@ -32,7 +33,8 @@ node('aam-identity-prodcd') {
         // CODACY_PROJECT_TS_LIB_TOKEN is a global set in jenkins
         stage('Test') {
             withEnv([
-              "REGISTRY=${registry}"
+              "REGISTRY=${registry}",
+              "COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}"
             ]) {
               parallel 'python34': {
                 sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=34 python34 make install test codacy"
@@ -44,8 +46,8 @@ node('aam-identity-prodcd') {
                 sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=36 python36 make install test codacy"
                 junit 'results-36.xml'
               }
+              sh 'docker-compose down'
             }
-            sh 'docker-compose down'
         }
 
         // determine if release should be pushed: the most recent commit must contain string "[release]"
@@ -79,4 +81,11 @@ node('aam-identity-prodcd') {
     } finally {
         sh 'docker-compose down'
     }
+}
+
+def getDockerComposeProject() {
+    return sh(
+        script: "basename `pwd` | sed 's/^[^a-zA-Z0-9]*//g'",
+        returnStdout: true
+    ).trim()
 }
