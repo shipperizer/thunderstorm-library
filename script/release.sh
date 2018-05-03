@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -ex
+
 GITHUB_ORG=$1
 GITHUB_REPO=$2
 
