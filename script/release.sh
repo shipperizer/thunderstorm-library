@@ -1,13 +1,15 @@
 #!/bin/bash
 
+set -ex
+
 GITHUB_ORG=$1
 GITHUB_REPO=$2
 
-PR_NUMBER=$(git log --merges -1 | grep -Eo '#[0-9]+' | sed 's/#//g')
+PR_NUMBER=$(git log --merges -1 | grep -Eo '#[0-9]+' | head -n 1 | sed 's/#//g')
 GITHUB_URL="https://api.github.com/repos/$GITHUB_ORG/${GITHUB_REPO}/pulls/${PR_NUMBER}"
 
 
-VERSION="v$(python setup.py --version)"
+VERSION=$(python setup.py --version)
 TAG="v${VERSION}"
 
 git remote set-url origin git@github.com:${GITHUB_ORG}/${GITHUB_REPO}.git
