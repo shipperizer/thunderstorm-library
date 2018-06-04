@@ -79,6 +79,7 @@ def ts_task(event_name, schema):
                 )
                 raise SchemaError(error_msg, errors=errors, data=ts_message)
             else:
+                logger.info('received ts_task on {}'.format(event_name))
                 ts_message.data = deserialized_data
                 return task_func(ts_message)
 
@@ -126,6 +127,7 @@ def send_ts_task(event_name, schema, data):
 
         raise SchemaError(error_msg, errors=errors, data=data)
     else:
+        logger.info('send_ts_task on {}'.format(event_name))
         event = {
             'data': data
         }
