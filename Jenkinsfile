@@ -36,6 +36,7 @@ node('aam-identity-prodcd') {
               "REGISTRY=${registry}",
               "COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}"
             ]) {
+              sh 'docker-compose down'
               parallel 'python34': {
                 sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=34 python34 make install test codacy"
                 junit 'results-34.xml'
