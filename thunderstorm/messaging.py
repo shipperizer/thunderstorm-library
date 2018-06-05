@@ -94,6 +94,9 @@ class SchemaError(Exception):
         self.errors = errors
         self.data = data
 
+    def __str__(self):
+        return '{}: {}'.format(super().__str__(), self)
+
 
 def send_ts_task(event_name, schema, data):
     """Send a Thunderstorm messaging event
