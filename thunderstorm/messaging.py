@@ -98,7 +98,7 @@ class SchemaError(Exception):
         return '{}: {}'.format(super().__str__(), self)
 
 
-def send_ts_task(event_name, schema, data):
+def send_ts_task(event_name, schema, data, **kwargs):
     """Send a Thunderstorm messaging event
 
     The correct task name is derived from the event name.
@@ -121,6 +121,9 @@ def send_ts_task(event_name, schema, data):
     Returns:
         The result of the send_task call.
     """
+
+    if {'name', 'args', 'exhange', 'routing_key'} & set(kwargs.keys()):
+        raise ValueError('Cannot override name, args, exchange or routing_key')
     task_name = ts_task_name(event_name)
     errors = schema.load(data).errors
     if errors:
@@ -138,5 +141,6 @@ def send_ts_task(event_name, schema, data):
             task_name,
             (event,),
             exchange='ts.messaging',
-            routing_key=event_name
+            routing_key=event_name,
+            **kwargs
         )
