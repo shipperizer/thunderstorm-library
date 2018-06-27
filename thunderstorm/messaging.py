@@ -95,7 +95,7 @@ class SchemaError(Exception):
         self.data = data
 
     def __str__(self):
-        return '{}: {}'.format(super().__str__(), self)
+        return '{}: {} with {}'.format(super().__str__(), self.errors, self.data)
 
 
 def send_ts_task(event_name, schema, data, **kwargs):
