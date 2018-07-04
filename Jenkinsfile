@@ -33,19 +33,29 @@ node('aam-identity-prodcd') {
         // CODACY_PROJECT_TS_LIB_TOKEN is a global set in jenkins
         stage('Test') {
             withEnv([
-              "REGISTRY=${registry}",
-              "COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}"
+              "REGISTRY=${registry}"
             ]) {
               sh 'docker-compose down'
               parallel 'python34': {
-                sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=34 python34 make install test codacy"
-                junit 'results-34.xml'
+                withEnv(["COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}34"]) {
+                  sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=34 python34 make install test codacy"
+                  junit 'results-34.xml'
+                }
               }, 'python35': {
-                sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=35 python35 make install test codacy"
-                junit 'results-35.xml'
+                withEnv(["COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}35"]) {
+                  sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=35 python35 make install test codacy"
+                  junit 'results-35.xml'
+                }
               }, 'python36': {
-                sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=36 python36 make install test codacy"
-                junit 'results-36.xml'
+                withEnv(["COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}36"]) {
+                  sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=36 python36 make install test codacy"
+                  junit 'results-36.xml'
+                }
+              }, 'python37': {
+                withEnv(["COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}37"]) {
+                  sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=37 python37 make install test codacy"
+                  junit 'results-37.xml'
+                }
               }
               sh 'docker-compose down'
             }
@@ -77,6 +87,7 @@ node('aam-identity-prodcd') {
         junit 'results-34.xml'
         junit 'results-35.xml'
         junit 'results-36.xml'
+        junit 'results-37.xml'
         error 'Thunderstorm library build failed ${err}'
 
     } finally {

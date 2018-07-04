@@ -15,7 +15,7 @@ lint:
 test: lint
 	pytest \
 		--cov thunderstorm \
-		--cov-report xml \
+		--cov-report xml:coverage-${PYTHON_VERSION}.xml \
 		--cov-append \
 		--junit-xml results-${PYTHON_VERSION}.xml \
 		test/
@@ -30,19 +30,4 @@ dist: clean
 	python setup.py sdist
 
 codacy:
-	python-codacy-coverage -r coverage.xml
-
-
-python34:
-	docker build --tag ${REGISTRY}/artsalliancemedia/python:3.4-slim -f config/Dockerfile34 .
-
-python35:
-	docker build --tag ${REGISTRY}/artsalliancemedia/python:3.5-slim -f config/Dockerfile35 .
-
-python36:
-	docker build --tag ${REGISTRY}/artsalliancemedia/python:3.6-slim -f config/Dockerfile36 .
-
-push:
-	docker push ${REGISTRY}/artsalliancemedia/python:3.4-slim
-	docker push ${REGISTRY}/artsalliancemedia/python:3.5-slim
-	docker push ${REGISTRY}/artsalliancemedia/python:3.6-slim
+	python-codacy-coverage -r coverage-${PYTHON_VERSION}.xml
