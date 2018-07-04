@@ -68,19 +68,24 @@ def test_deprecated_no_deadline(mock_logger, flask_app):
 
 @pytest.mark.parametrize('path,header,new_path', [
     (  # chops common suffix
+        '/api/v3/device/dc9c0e76-3d99-11e8-8752-33401e43ad3b?page=1&dude=true',
+        'type=prefix; source=/api/v1/screen; target=/api/v3/screen',
+        '/api/v1/device/dc9c0e76-3d99-11e8-8752-33401e43ad3b?page=1&dude=true',
+    ),
+    (
         '/api/v3/device/dc9c0e76-3d99-11e8-8752-33401e43ad3b',
         'type=prefix; source=/api/v1/screen; target=/api/v3/screen',
         '/api/v1/device/dc9c0e76-3d99-11e8-8752-33401e43ad3b',
     ),
     (
-        '/api/v3/device/dc9c0e76-3d99-11e8-8752-33401e43ad3b',
+        '/api/v3/device/dc9c0e76-3d99-11e8-8752-33401e43ad3b?page=1',
         'type=prefix; source=/api/v1; target=/api/v3',
-        '/api/v1/device/dc9c0e76-3d99-11e8-8752-33401e43ad3b',
+        '/api/v1/device/dc9c0e76-3d99-11e8-8752-33401e43ad3b?page=1',
     ),
     (
-        '/foo/bar',
+        '/foo/bar?page=1',
         'type=transparent; source=/other/invalid; target=invalid/foo',
-        '/foo/bar',
+        '/foo/bar?page=1',
     ),
     (
         '/foo/bar',
@@ -88,24 +93,29 @@ def test_deprecated_no_deadline(mock_logger, flask_app):
         '/other/source'
     ),
     (
-        '/foo/bar',
+        '/foo/bar?page=1&dude=true',
+        'type=static; source=/other/source; target=invalid/foo',
+        '/other/source?page=1&dude=true'
+    ),
+    (
+        '/foo/bar?page=1',
         'type=invalid',
-        '/foo/bar',
+        '/foo/bar?page=1',
     ),
     (
-        '/foo/bar',
+        '/foo/bar?page=1',
         'adnao',
-        '/foo/bar',
+        '/foo/bar?page=1',
     ),
     (
-        '/foo/bar',
+        '/foo/bar?page=1',
         'type=prefix',
-        '/foo/bar',
+        '/foo/bar?page=1',
     ),
     (
-        '/foo/bar',
+        '/foo/bar?page=1',
         'type=prefix; source=/other/source; target=/other/prefix',
-        '/foo/bar',
+        '/foo/bar?page=1',
     )
 ])
 def test_rewrite_path_with_header(path, header, new_path):

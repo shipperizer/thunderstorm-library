@@ -1,6 +1,7 @@
 import datetime
 import functools
 import logging
+from urllib.parse import urlparse
 
 from dateutil import parser
 from flask import request, make_response
@@ -88,6 +89,9 @@ def rewrite_path_with_header(path, header):
         if rewritten['type'] == 'transparent':
             return path
         elif rewritten['type'] == 'static':
+            query = urlparse(path).query
+            if query:
+                return '{}?{}'.format(rewritten['source'], query)
             return rewritten['source']
         elif rewritten['type'] == 'prefix':
             # TODO @robyoung fix this quick hack
