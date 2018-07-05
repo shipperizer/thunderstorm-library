@@ -14,6 +14,7 @@ lint:
 
 test: lint
 	pytest \
+		-vv \
 		--cov thunderstorm \
 		--cov-report xml:coverage-${PYTHON_VERSION}.xml \
 		--cov-append \
