@@ -1,6 +1,31 @@
 from urllib.parse import urlparse
 
 
+def _strip_query(url_path):
+    """
+    Strip out query params page and page_size from the query params
+
+    Args:
+        url_path (str): Path of the URL the request was made to
+
+    Returns:
+        str: query params string without page and page_size
+    """
+    query = urlparse(url_path).query
+
+    if query:
+        # remove page and page_size
+        query = [
+            params for params in query.split('&')
+            if not params.startswith(('page', 'page_size'))
+        ]
+        # rejoin query params
+        query = '&'.join(query)
+
+    return query
+
+
+
 def get_pagination_info(page, page_size, num_records, url_path):
     """
     Utility function for creating a dict of pagination information.
@@ -15,6 +40,9 @@ def get_pagination_info(page, page_size, num_records, url_path):
         dict: Dict containining pagination information. The structure of this
             dict should match the PaginationSchema in schemas.py
     """
+    # get query args if exist strip out page_size and page query args
+    query = _strip_query(url_path)
+
     # strip url to be just the path
     url_path = urlparse(url_path).path
 
@@ -22,7 +50,11 @@ def get_pagination_info(page, page_size, num_records, url_path):
     prev_page = page - 1 if page != 1 else None
 
     pagination_info = {}
-    base_url = '{}?page_size={}'.format(url_path, page_size)
+
+    if query:
+        base_url = '{}?{}&page_size={}'.format(url_path, query, page_size)
+    else:
+        base_url = '{}?page_size={}'.format(url_path, page_size)
 
     if next_page:
         pagination_info['next_page'] = '{}&page={}'.format(base_url, next_page)
