@@ -3,10 +3,7 @@ from unittest.mock import patch
 import pytest
 import flask
 
-from thunderstorm.flask import (
-    deprecated,
-    rewrite_path_with_header
-)
+from thunderstorm.flask.headers import deprecated, rewrite_path_with_header
 
 
 @pytest.fixture
@@ -31,7 +28,7 @@ def flask_app():
     return app
 
 
-@patch('thunderstorm.flask.logger')
+@patch('thunderstorm.flask.headers.logger')
 def test_deprecated_before_deadline(mock_logger, flask_app):
     resp = flask_app.test_client().get('/future')
 
@@ -43,7 +40,7 @@ def test_deprecated_before_deadline(mock_logger, flask_app):
     )
 
 
-@patch('thunderstorm.flask.logger')
+@patch('thunderstorm.flask.headers.logger')
 def test_deprecated_after_deadline(mock_logger, flask_app):
     resp = flask_app.test_client().get('/past')
 
@@ -55,7 +52,7 @@ def test_deprecated_after_deadline(mock_logger, flask_app):
     )
 
 
-@patch('thunderstorm.flask.logger')
+@patch('thunderstorm.flask.headers.logger')
 def test_deprecated_no_deadline(mock_logger, flask_app):
     resp = flask_app.test_client().get('/none')
 

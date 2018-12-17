@@ -3,10 +3,13 @@ from unittest.mock import MagicMock
 import pytest
 
 from test.helpers import patch_fixture, TestSchema, TestException
-from thunderstorm.exceptions import DeserializationError
-from thunderstorm.utils import get_pagination_info, paginate, get_request_filters, get_request_pagination
+from thunderstorm.flask.exceptions import DeserializationError
+from thunderstorm.flask.request_utils import (
+    get_pagination_info, paginate, get_request_filters, get_request_pagination
+)
 
-mock_request = patch_fixture('thunderstorm.utils.request')
+
+mock_request = patch_fixture('thunderstorm.flask.request_utils.request')
 
 
 @pytest.mark.parametrize('page,page_size,num_records,prev_page,next_page,url', [
@@ -48,6 +51,7 @@ def test_paginate(page, page_size, num_records, prev_page, next_page, url):
     res_query.offset.assert_called_with((page - 1) * page_size)
     res_query.limit.assert_called_with(page_size)
     assert res_query == m_query
+
 
 
 def test_get_request_filters_raises_with_bad_data(mock_request):

@@ -1,7 +1,7 @@
 from marshmallow import Schema, fields
 from marshmallow.validate import Range
 
-from thunderstorm.flask import rewrite_path
+from thunderstorm.flask.headers import rewrite_path
 
 
 class PaginationSchema(Schema):
