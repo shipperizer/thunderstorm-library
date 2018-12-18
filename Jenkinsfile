@@ -36,12 +36,7 @@ node('aam-identity-prodcd') {
               "REGISTRY=${registry}"
             ]) {
               sh 'docker-compose down'
-              parallel 'python34': {
-                withEnv(["COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}34"]) {
-                  sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=34 python34 make install test codacy"
-                  junit 'results-34.xml'
-                }
-              }, 'python35': {
+              parallel 'python35': {
                 withEnv(["COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}35"]) {
                   sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=35 python35 make install test codacy"
                   junit 'results-35.xml'
@@ -84,7 +79,6 @@ node('aam-identity-prodcd') {
           }
       }
     } catch (err) {
-        junit 'results-34.xml'
         junit 'results-35.xml'
         junit 'results-36.xml'
         junit 'results-37.xml'
