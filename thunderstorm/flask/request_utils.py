@@ -26,12 +26,10 @@ def make_paginated_response(query, url_path, schema, page, page_size):
     start = (page - 1) * page_size
     num_records = query.count()
 
-    response = get_pagination_info(page, page_size, num_records, url_path)
+    pagination_info = get_pagination_info(page, page_size, num_records, url_path)
     query = query.offset(start).limit(page_size)
 
-    # python34 does not support **pagination_info when creating a dict so update the repsonse dict manually
-    response['data'] = query
-    return schema().dump(response).data
+    return schema().dump({'data': query, **pagination_info}).data
 
 
 def get_request_pagination(params=None, exc=DeserializationError):
