@@ -28,7 +28,6 @@ def make_paginated_response(query, url_path, schema, page, page_size):
 
     pagination_info = get_pagination_info(page, page_size, num_records, url_path)
     query = query.offset(start).limit(page_size)
-
     return schema().dump({'data': query, **pagination_info}).data
 
 

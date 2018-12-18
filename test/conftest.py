@@ -1,8 +1,11 @@
+from unittest.mock import MagicMock
+
 import flask
 from marshmallow import fields, Schema
 import pytest
 
 from thunderstorm.flask.headers import deprecated
+from thunderstorm.flask.schemas import PaginationSchema
 
 
 @pytest.fixture
@@ -24,7 +27,7 @@ def TestException():
 
 
 @pytest.fixture
-def flask_app():
+def flask_app(mock_query):
     app = flask.Flask('test_app')
 
     @app.route('/past')
@@ -43,3 +46,26 @@ def flask_app():
         return 'ok'
 
     return app
+
+
+@pytest.fixture
+def mock_query():
+    query = MagicMock()
+    query.count.return_value = 50
+
+    def query_maker(num_items):
+        return [
+            {'int_1': 1, 'int_2': 2} for _ in range(num_items)
+        ]
+
+    query.offset.return_value.limit = query_maker
+
+    return query
+
+
+@pytest.fixture
+def TestSchemaList(TestSchema):
+    class TestSchemaList(PaginationSchema):
+        data = fields.List(fields.Nested(TestSchema))
+
+    return TestSchemaList

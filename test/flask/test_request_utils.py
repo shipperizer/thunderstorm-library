@@ -4,7 +4,8 @@ import pytest
 
 from thunderstorm.flask.exceptions import DeserializationError
 from thunderstorm.flask.request_utils import (
-    get_pagination_info, paginate, get_request_filters, get_request_pagination
+    get_pagination_info, paginate, get_request_filters, get_request_pagination,
+    make_paginated_response
 )
 
 
@@ -119,3 +120,20 @@ def test_get_request_pagination_success_with_request_args(mock_request, TestExce
 
     # act/assert
     assert get_request_pagination(exc=TestException) == data
+
+
+def test_make_response_success(mock_query, TestSchemaList, flask_app):
+    # arrange
+    with flask_app.test_request_context():
+
+        # act
+        resp = make_paginated_response(mock_query, '/some/fake/path', TestSchemaList, 1, 20)
+
+        # assert
+        assert len(resp['data']) == 20
+        resp.pop('data')
+        assert resp == {
+            'next_page': '/some/fake/path?page_size=20&page=2',
+            'total_records': 50,
+            'prev_page': None
+        }
