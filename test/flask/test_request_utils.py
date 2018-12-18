@@ -1,15 +1,11 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from test.helpers import patch_fixture, TestSchema, TestException
 from thunderstorm.flask.exceptions import DeserializationError
 from thunderstorm.flask.request_utils import (
     get_pagination_info, paginate, get_request_filters, get_request_pagination
 )
-
-
-mock_request = patch_fixture('thunderstorm.flask.request_utils.request')
 
 
 @pytest.mark.parametrize('page,page_size,num_records,prev_page,next_page,url', [
@@ -53,8 +49,8 @@ def test_paginate(page, page_size, num_records, prev_page, next_page, url):
     assert res_query == m_query
 
 
-
-def test_get_request_filters_raises_with_bad_data(mock_request):
+@patch('thunderstorm.flask.request_utils.request')
+def test_get_request_filters_raises_with_bad_data(mock_request, TestSchema, TestException):
     # arrange
     data = {'int_1': 'notinteger', 'int_2': 2}
     mock_request.args = data
@@ -64,7 +60,8 @@ def test_get_request_filters_raises_with_bad_data(mock_request):
         get_request_filters(TestSchema, TestException)
 
 
-def test_get_request_filters_success(mock_request):
+@patch('thunderstorm.flask.request_utils.request')
+def test_get_request_filters_success(mock_request, TestSchema, TestException):
     # arrange
     data = {'int_1': 1, 'int_2': 2}
     mock_request.args = data
@@ -90,7 +87,10 @@ def test_get_request_pagination_failure_raises_KeyError_with_missing_key():
         assert get_request_pagination(data)
 
 
-def test_get_request_pagination_raises_exc_when_provided_and_request_args_invalid(mock_request):
+@patch('thunderstorm.flask.request_utils.request')
+def test_get_request_pagination_raises_exc_when_provided_and_request_args_invalid(
+    mock_request, TestException
+):
     # arrange
     data = {'page': 1, 'page_size': 'word'}
     mock_request.args = data
@@ -100,6 +100,7 @@ def test_get_request_pagination_raises_exc_when_provided_and_request_args_invali
         get_request_pagination(exc=TestException)
 
 
+@patch('thunderstorm.flask.request_utils.request')
 def test_get_request_pagination_raises_DeserializationError_when_no_exc_provided_and_request_args_invalid(mock_request):
     # arrange
     data = {'page': 1, 'page_size': 'word'}
@@ -110,7 +111,8 @@ def test_get_request_pagination_raises_DeserializationError_when_no_exc_provided
         get_request_pagination()
 
 
-def test_get_request_pagination_success_with_request_args(mock_request):
+@patch('thunderstorm.flask.request_utils.request')
+def test_get_request_pagination_success_with_request_args(mock_request, TestException):
     # arrange
     data = {'page': 1, 'page_size': 1}
     mock_request.args = data

@@ -1,31 +1,8 @@
 from unittest.mock import patch
 
 import pytest
-import flask
 
-from thunderstorm.flask.headers import deprecated, rewrite_path_with_header
-
-
-@pytest.fixture
-def flask_app():
-    app = flask.Flask('test_app')
-
-    @app.route('/past')
-    @deprecated(deadline='2012-12-12')
-    def past():
-        return 'ok'
-
-    @app.route('/future')
-    @deprecated(deadline='2050-05-05')
-    def future():
-        return 'ok'
-
-    @app.route('/none')
-    @deprecated
-    def none():
-        return 'ok'
-
-    return app
+from thunderstorm.flask.headers import rewrite_path_with_header
 
 
 @patch('thunderstorm.flask.headers.logger')
