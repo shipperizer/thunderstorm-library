@@ -67,10 +67,10 @@ def test_ts_task_fails_on_schema_error():
         my_task({'data': {'bar': 'foo'}, 'request_id': 123})
 
 
-@patch('thunderstorm.messaging.send_task')
-def test_send_ts_task_with_one(mock_send_task):
+def test_send_ts_task_with_one(celery):
     # act
-    send_ts_task('foo.bar', FooSchema(), {'foo': 'bar'})
+    with patch.object(celery, 'send_task') as mock_send_task:
+        send_ts_task('foo.bar', FooSchema(), {'foo': 'bar'})
 
     # assert
     mock_send_task.assert_called_once_with(
@@ -80,10 +80,10 @@ def test_send_ts_task_with_one(mock_send_task):
     )
 
 
-@patch('thunderstorm.messaging.send_task')
-def test_send_ts_task_with_many(mock_send_task):
+def test_send_ts_task_with_many(celery):
     # act
-    send_ts_task('foo.bar', FooSchema(many=True), [{'foo': 'bar'}])
+    with patch.object(celery, 'send_task') as mock_send_task:
+        send_ts_task('foo.bar', FooSchema(many=True), [{'foo': 'bar'}])
 
     # assert
     mock_send_task.assert_called_once_with(
@@ -93,34 +93,34 @@ def test_send_ts_task_with_many(mock_send_task):
     )
 
 
-@patch('thunderstorm.messaging.send_task')
-def test_send_ts_task_fails_on_schema_validation_failure(mock_send_task):
+def test_send_ts_task_fails_on_schema_validation_failure(celery):
     # assert
     with pytest.raises(SchemaError):
         # act
-        send_ts_task('foo.bar', FooSchema(many=False), {'bar': 'foo'})
+        with patch.object(celery, 'send_task') as mock_send_task:
+            send_ts_task('foo.bar', FooSchema(many=False), {'bar': 'foo'})
 
     # assert
     assert not mock_send_task.called
 
 
-@patch('thunderstorm.messaging.send_task')
-def test_send_ts_task_fails_on_one_when_expecting_many(mock_send_task):
+def test_send_ts_task_fails_on_one_when_expecting_many(celery):
     # assert
     with pytest.raises(SchemaError):
         # act
-        send_ts_task('foo.bar', FooSchema(many=True), {'foo': 'bar'})
+        with patch.object(celery, 'send_task') as mock_send_task:
+            send_ts_task('foo.bar', FooSchema(many=True), {'foo': 'bar'})
 
     # assert
     assert not mock_send_task.called
 
 
-@patch('thunderstorm.messaging.send_task')
-def test_send_ts_task_fails_on_many_when_expecting_one(mock_send_task):
+def test_send_ts_task_fails_on_many_when_expecting_one(celery):
     # assert
     with pytest.raises(SchemaError):
         # act
-        send_ts_task('foo.bar', FooSchema(many=False), [{'foo': 'bar'}])
+        with patch.object(celery, 'send_task') as mock_send_task:
+            send_ts_task('foo.bar', FooSchema(many=False), [{'foo': 'bar'}])
 
     # assert
     assert not mock_send_task.called
