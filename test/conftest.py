@@ -49,6 +49,22 @@ def flask_app(mock_query):
 
 
 @pytest.fixture
+def celery(celery_app):
+    celery_app.conf.broker_transport_options = {
+        'confirm_publish': True,  # optional, not affecting celery hang up
+        'max_retries': 3,
+        'interval_start': 0,
+        'interval_step': 0.1,
+        'interval_max': 0.2,
+    }
+
+    # set as current so the current_app proxy works
+    celery_app.set_current()
+
+    return celery_app
+
+
+@pytest.fixture
 def mock_query():
     query = MagicMock()
     query.count.return_value = 50

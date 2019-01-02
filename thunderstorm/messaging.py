@@ -2,8 +2,7 @@
 import collections
 
 from celery.utils.log import get_task_logger
-from celery.execute import send_task
-from celery import shared_task
+from celery import current_app, shared_task
 from statsd.defaults.env import statsd
 
 
@@ -137,7 +136,7 @@ def send_ts_task(event_name, schema, data, **kwargs):
         event = {
             'data': data
         }
-        return send_task(
+        return current_app.send_task(
             task_name,
             (event,),
             exchange='ts.messaging',
