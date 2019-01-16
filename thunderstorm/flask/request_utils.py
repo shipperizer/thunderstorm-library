@@ -1,8 +1,9 @@
 from urllib.parse import urlparse
 
 from flask import request
+from marshmallow.exceptions import ValidationError
 
-from thunderstorm.flask.exceptions import DeserializationError
+from thunderstorm.flask.exceptions import DeserializationError, SerializationError
 from thunderstorm.flask.schemas import PaginationRequestSchema
 
 
@@ -22,13 +23,19 @@ def make_paginated_response(query, url_path, schema, page, page_size):
     Returns:
         dict: The structure of which conforms to the thunderstorm API
             spec response structure
+
+    Raises:
+        SerializationError: If serialization of the pagination info fails for any reason
     """
     start = (page - 1) * page_size
     num_records = query.count()
 
     pagination_info = get_pagination_info(page, page_size, num_records, url_path)
     query = query.offset(start).limit(page_size)
-    return schema().dump({'data': query, **pagination_info}).data
+    try:
+        return schema().dump({'data': query, **pagination_info})
+    except ValidationError as vex:
+        raise SerializationError(('Error serializing pagination info: {}'.format(vex.messages)))
 
 
 def get_request_pagination(params=None, exc=DeserializationError):
@@ -50,11 +57,10 @@ def get_request_pagination(params=None, exc=DeserializationError):
 
     params = request.args
 
-    pagination, errors = PaginationRequestSchema().load(params)
-    if errors:
-        raise exc('Error deserializing pagination options: {}'.format(errors))
-
-    return pagination
+    try:
+        return PaginationRequestSchema().load(params)
+    except ValidationError as vex:
+        raise exc('Error deserializing pagination options: {}'.format(vex.messages))
 
 
 def get_request_filters(schema, exc):
@@ -68,11 +74,10 @@ def get_request_filters(schema, exc):
     Raises:
         exc: If there are any marshmallow validation errors deserializing request.args
     """
-    data, errors = schema().load(request.args)
-    if errors:
-        raise exc('Error deserializing filters provided: {}'.format(errors))
-
-    return data
+    try:
+        return schema().load(request.args)
+    except ValidationError as vex:
+        raise exc('Error deserializing filters provided: {}'.format(vex.messages))
 
 
 def _strip_query(url_path):

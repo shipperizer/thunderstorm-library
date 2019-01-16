@@ -3,6 +3,7 @@ import collections
 
 from celery.utils.log import get_task_logger
 from celery import current_app, shared_task
+from marshmallow.exceptions import ValidationError
 from statsd.defaults.env import statsd
 
 
@@ -68,15 +69,16 @@ def ts_task(event_name, schema):
         def task_handler(message):
             ts_message = TSMessage(message.pop('data'), message)
 
-            deserialized_data, errors = schema.load(ts_message)
-            if errors:
+            try:
+                deserialized_data = schema.load(ts_message)
+            except ValidationError as vex:
                 statsd.incr('tasks.{}.ts_task.errors.schema'.format(task_name))
                 error_msg = 'inbound schema validation error for event {}'.format(event_name)  # noqa
                 logger.error(
                     error_msg,
-                    extra={'errors': errors, 'data': ts_message}
+                    extra={'errors': vex.messages, 'data': ts_message}
                 )
-                raise SchemaError(error_msg, errors=errors, data=ts_message)
+                raise SchemaError(error_msg, errors=vex.messages, data=ts_message)
             else:
                 logger.info('received ts_task on {}'.format(event_name))
                 ts_message.data = deserialized_data
@@ -124,13 +126,15 @@ def send_ts_task(event_name, schema, data, **kwargs):
     if {'name', 'args', 'exhange', 'routing_key'} & set(kwargs.keys()):
         raise ValueError('Cannot override name, args, exchange or routing_key')
     task_name = ts_task_name(event_name)
-    errors = schema.load(data).errors
-    if errors:
+
+    try:
+        schema.load(data)
+    except ValidationError as vex:
         statsd.incr('tasks.{}.send_ts_task.errors.schema'.format(task_name))
         error_msg = 'outbound schema validation error for event {}'.format(event_name)  # noqa
-        logger.error(error_msg, extra={'errors': errors, 'data': data})
+        logger.error(error_msg, extra={'errors': vex.messages, 'data': data})
 
-        raise SchemaError(error_msg, errors=errors, data=data)
+        raise SchemaError(error_msg, errors=vex.messages, data=data)
     else:
         logger.info('send_ts_task on {}'.format(event_name))
         event = {
