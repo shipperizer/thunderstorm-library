@@ -123,7 +123,7 @@ def send_ts_task(event_name, schema, data, **kwargs):
         The result of the send_task call.
     """
 
-    if {'name', 'args', 'exhange', 'routing_key'} & set(kwargs.keys()):
+    if {'name', 'args', 'exchange', 'routing_key'} & set(kwargs.keys()):
         raise ValueError('Cannot override name, args, exchange or routing_key')
     task_name = ts_task_name(event_name)
 
