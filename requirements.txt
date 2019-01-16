@@ -2,4 +2,4 @@ celery>4,<5
 flask<2,>=0.12.3
 python-dateutil==2.6.1
 statsd>=3.2.1,<4
-marshmallow>=2.15,<3
+marshmallow>=3.0.0rc3,<4
