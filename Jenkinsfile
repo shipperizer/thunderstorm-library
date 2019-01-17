@@ -63,21 +63,33 @@ node('aam-identity-prodcd') {
         if (env.BRANCH_NAME == 'master') {
 
             stage('Create Github Release') {
-
                 if (is_release == 0) {
                   // GITHUB_TOKEN is a global set in jenkins
-                  withEnv([
-                      "GITHUB_TOKEN=${env.GITHUB_TOKEN}",
-                  ]) {
-                    // create distribution
-                    sh "make dist"
-                    sh "./script/release.sh '${user}' '${repo}'"
-                  }
-              } else {
-                  echo 'No [release] commit -- skipping'
-              }
-          }
-      }
+                      withEnv([
+                          "GITHUB_TOKEN=${env.GITHUB_TOKEN}",
+                      ]) {
+                          // create distribution
+                          sh "make dist"
+                          sh "./script/release.sh '${user}' '${repo}'"
+                      }
+                } else {
+                    echo 'No [release] commit -- skipping'
+                }
+            }
+
+            stage("Changelog") {
+                description = gitChangelog returnType: 'STRING',
+                  gitHub: [api: 'https://api.github.com/repos/artsalliancemedia/thunderstorm-library', issuePattern: '', token: env.GITHUB_TOKEN],
+                  from: [type: 'REF', value: 'master'],
+                  to: [type: 'REF', value: env.BRANCH_NAME],
+                  template: prTemplate()
+
+                echo "### Changelog ###"
+                echo "${description}"
+                echo "### Changelog ###"
+            }
+        }
+
     } catch (err) {
         junit 'results-35.xml'
         junit 'results-36.xml'
@@ -94,4 +106,10 @@ def getDockerComposeProject() {
         script: "basename `pwd` | sed 's/^[^a-zA-Z0-9]*//g'",
         returnStdout: true
     ).trim()
+}
+
+def prTemplate() {
+  def template = readFile 'CHANGELOG.md'
+  // don't forget to trim or you'll get a newline in the string
+  return template.trim()
 }
