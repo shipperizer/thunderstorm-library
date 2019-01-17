@@ -93,12 +93,23 @@ def test_send_ts_task_with_many(celery):
     )
 
 
-def test_send_ts_task_fails_on_schema_validation_failure(celery):
+def test_send_ts_task_raises_SchemaError_on_schema_validation_deserilization(celery):
     # assert
     with pytest.raises(SchemaError):
         # act
         with patch.object(celery, 'send_task') as mock_send_task:
-            send_ts_task('foo.bar', FooSchema(many=False), {'bar': 'foo'})
+            send_ts_task('foo.bar', FooSchema(many=False), {'baz': 'foo'})
+
+    # assert
+    assert not mock_send_task.called
+
+
+def test_send_ts_task_raises_SchemaError_on_schema_validation_serilization(celery):
+    # assert
+    with pytest.raises(SchemaError):
+        # act
+        with patch.object(celery, 'send_task') as mock_send_task:
+            send_ts_task('foo.bar', FooSchema(many=False), {'baz': 'not_a_uuid'})
 
     # assert
     assert not mock_send_task.called

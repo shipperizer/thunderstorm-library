@@ -2,7 +2,7 @@
 
 CODACY_PROJECT_TOKEN?=fake
 PYTHON_VERSION?=default
-REGISTRY?=docker.io
+REGISTRY?=886366864302.dkr.ecr.eu-west-1.amazonaws.com
 VERSION?=0.0.0
 
 install:
