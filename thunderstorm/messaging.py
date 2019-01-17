@@ -114,10 +114,10 @@ def send_ts_task(event_name, schema, data, **kwargs):
         event_name (str): The event name (this is also the routing key)
         schema (marshmallow.Schema): The schema instance the payload must
                                      comply to
-        data (dict or list): The event data to be emitted
+        data (dict or list): The event data to be emitted (does not need to be serialized yet)
 
     Raises:
-        SchemaError if schema validation fails.
+        SchemaError If schema validation fails.
 
     Returns:
         The result of the send_task call.
@@ -128,10 +128,16 @@ def send_ts_task(event_name, schema, data, **kwargs):
     task_name = ts_task_name(event_name)
 
     try:
+        data = schema.dump(data)
+    except ValidationError as vex:
+        error_msg = 'Error serializing queue message data'
+        raise SchemaError(error_msg, errors=vex.messages, data=data)
+
+    try:
         schema.load(data)
     except ValidationError as vex:
         statsd.incr('tasks.{}.send_ts_task.errors.schema'.format(task_name))
-        error_msg = 'outbound schema validation error for event {}'.format(event_name)  # noqa
+        error_msg = 'Outbound schema validation error for event {}'.format(event_name)  # noqa
         logger.error(error_msg, extra={'errors': vex.messages, 'data': data})
 
         raise SchemaError(error_msg, errors=vex.messages, data=data)
