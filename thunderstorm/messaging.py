@@ -7,6 +7,9 @@ from marshmallow.exceptions import ValidationError
 from statsd.defaults.env import statsd
 
 
+import marshmallow  # TODO: @will-norris backwards compat - remove
+BACK_COMPAT = int(marshmallow.__version__[0]) < 3
+
 logger = get_task_logger(__name__)
 
 
@@ -69,20 +72,36 @@ def ts_task(event_name, schema):
         def task_handler(message):
             ts_message = TSMessage(message.pop('data'), message)
 
-            try:
-                deserialized_data = schema.load(ts_message)
-            except ValidationError as vex:
-                statsd.incr('tasks.{}.ts_task.errors.schema'.format(task_name))
-                error_msg = 'inbound schema validation error for event {}'.format(event_name)  # noqa
-                logger.error(
-                    error_msg,
-                    extra={'errors': vex.messages, 'data': ts_message}
-                )
-                raise SchemaError(error_msg, errors=vex.messages, data=ts_message)
+            # TODO: @will-norris backwards compat - remove
+            if BACK_COMPAT:
+                deserialized_data, errors = schema.load(ts_message)
+                if errors:
+                    statsd.incr('tasks.{}.ts_task.errors.schema'.format(task_name))
+                    error_msg = 'inbound schema validation error for event {}'.format(event_name)  # noqa
+                    logger.error(
+                        error_msg,
+                        extra={'errors': errors, 'data': ts_message}
+                    )
+                    raise SchemaError(error_msg, errors=errors, data=ts_message)
+                else:
+                    logger.info('received ts_task on {}'.format(event_name))
+                    ts_message.data = deserialized_data
+                    return task_func(ts_message)
             else:
-                logger.info('received ts_task on {}'.format(event_name))
-                ts_message.data = deserialized_data
-                return task_func(ts_message)
+                try:
+                    deserialized_data = schema.load(ts_message)
+                except ValidationError as vex:
+                    statsd.incr('tasks.{}.ts_task.errors.schema'.format(task_name))
+                    error_msg = 'inbound schema validation error for event {}'.format(event_name)  # noqa
+                    logger.error(
+                        error_msg,
+                        extra={'errors': vex.messages, 'data': ts_message}
+                    )
+                    raise SchemaError(error_msg, errors=vex.messages, data=ts_message)
+                else:
+                    logger.info('received ts_task on {}'.format(event_name))
+                    ts_message.data = deserialized_data
+                    return task_func(ts_message)
 
         return shared_task(name=task_name)(task_handler)
 
@@ -127,29 +146,53 @@ def send_ts_task(event_name, schema, data, **kwargs):
         raise ValueError('Cannot override name, args, exchange or routing_key')
     task_name = ts_task_name(event_name)
 
-    try:
-        data = schema.dump(data)
-    except ValidationError as vex:
-        error_msg = 'Error serializing queue message data'
-        raise SchemaError(error_msg, errors=vex.messages, data=data)
+    # TODO: @will-norris backwards compat - remove
+    if BACK_COMPAT:
+        data = schema.dump(data).data
 
-    try:
-        schema.load(data)
-    except ValidationError as vex:
-        statsd.incr('tasks.{}.send_ts_task.errors.schema'.format(task_name))
-        error_msg = 'Outbound schema validation error for event {}'.format(event_name)  # noqa
-        logger.error(error_msg, extra={'errors': vex.messages, 'data': data})
+        data, errors = schema.load(data)
+        if errors:
+            statsd.incr('tasks.{}.send_ts_task.errors.schema'.format(task_name))
+            error_msg = 'Outbound schema validation error for event {}'.format(event_name)  # noqa
+            logger.error(error_msg, extra={'errors': errors, 'data': data})
 
-        raise SchemaError(error_msg, errors=vex.messages, data=data)
+            raise SchemaError(error_msg, errors=errors, data=data)
+        else:
+            logger.info('send_ts_task on {}'.format(event_name))
+            event = {
+                'data': data
+            }
+            return current_app.send_task(
+                task_name,
+                (event,),
+                exchange='ts.messaging',
+                routing_key=event_name,
+                **kwargs
+            )
     else:
-        logger.info('send_ts_task on {}'.format(event_name))
-        event = {
-            'data': data
-        }
-        return current_app.send_task(
-            task_name,
-            (event,),
-            exchange='ts.messaging',
-            routing_key=event_name,
-            **kwargs
-        )
+        try:
+            data = schema.dump(data)
+        except ValidationError as vex:
+            error_msg = 'Error serializing queue message data'
+            raise SchemaError(error_msg, errors=vex.messages, data=data)
+
+        try:
+            schema.load(data)
+        except ValidationError as vex:
+            statsd.incr('tasks.{}.send_ts_task.errors.schema'.format(task_name))
+            error_msg = 'Outbound schema validation error for event {}'.format(event_name)  # noqa
+            logger.error(error_msg, extra={'errors': vex.messages, 'data': data})
+
+            raise SchemaError(error_msg, errors=vex.messages, data=data)
+        else:
+            logger.info('send_ts_task on {}'.format(event_name))
+            event = {
+                'data': data
+            }
+            return current_app.send_task(
+                task_name,
+                (event,),
+                exchange='ts.messaging',
+                routing_key=event_name,
+                **kwargs
+            )

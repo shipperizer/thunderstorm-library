@@ -6,6 +6,9 @@ from marshmallow.exceptions import ValidationError
 from thunderstorm.flask.exceptions import DeserializationError, SerializationError
 from thunderstorm.flask.schemas import PaginationRequestSchema
 
+import marshmallow  # TODO: @will-norris backwards compat - remove
+BACK_COMPAT = int(marshmallow.__version__[0]) < 3
+
 
 def make_paginated_response(query, url_path, schema, page, page_size):
     """
@@ -32,10 +35,15 @@ def make_paginated_response(query, url_path, schema, page, page_size):
 
     pagination_info = get_pagination_info(page, page_size, num_records, url_path)
     query = query.offset(start).limit(page_size)
-    try:
-        return schema().dump({'data': query, **pagination_info})
-    except ValidationError as vex:
-        raise SerializationError(('Error serializing pagination info: {}'.format(vex.messages)))
+
+    # TODO: @will-norris backwards compat - remove
+    if BACK_COMPAT:
+        return schema().dump({'data': query, **pagination_info}).data
+    else:
+        try:
+            return schema().dump({'data': query, **pagination_info})
+        except ValidationError as vex:
+            raise SerializationError(('Error serializing pagination info: {}'.format(vex.messages)))
 
 
 def get_request_pagination(params=None, exc=DeserializationError):
@@ -57,10 +65,17 @@ def get_request_pagination(params=None, exc=DeserializationError):
 
     params = request.args
 
-    try:
-        return PaginationRequestSchema().load(params)
-    except ValidationError as vex:
-        raise exc('Error deserializing pagination options: {}'.format(vex.messages))
+    # TODO: @will-norris backwards compat - remove
+    if BACK_COMPAT:
+        data, errors = PaginationRequestSchema().load(params)
+        if errors:
+            raise exc('Error deserializing pagination options: {}'.format(errors))
+        return data
+    else:
+        try:
+            return PaginationRequestSchema().load(params)
+        except ValidationError as vex:
+            raise exc('Error deserializing pagination options: {}'.format(vex.messages))
 
 
 def get_request_filters(schema, exc):
@@ -74,10 +89,17 @@ def get_request_filters(schema, exc):
     Raises:
         exc: If there are any marshmallow validation errors deserializing request.args
     """
-    try:
-        return schema().load(request.args)
-    except ValidationError as vex:
-        raise exc('Error deserializing filters provided: {}'.format(vex.messages))
+    # TODO: @will-norris backwards compat - remove
+    if BACK_COMPAT:
+        data, errors = schema().load(request.args)
+        if errors:
+            raise exc('Error deserializing filters provided: {}'.format(errors))
+        return data
+    else:
+        try:
+            return schema().load(request.args)
+        except ValidationError as vex:
+            raise exc('Error deserializing filters provided: {}'.format(vex.messages))
 
 
 def _strip_query(url_path):

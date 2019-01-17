@@ -6,7 +6,8 @@ REGISTRY?=886366864302.dkr.ecr.eu-west-1.amazonaws.com
 VERSION?=0.0.0
 
 install:
-	pip install -r requirements.txt
+	@echo "# --pre allows pre releases"
+	pip install --pre -e .
 	pip install -r requirements-dev.txt
 
 lint:
