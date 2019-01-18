@@ -7,7 +7,7 @@ from thunderstorm.flask.exceptions import DeserializationError, SerializationErr
 from thunderstorm.flask.schemas import PaginationRequestSchema
 
 import marshmallow  # TODO: @will-norris backwards compat - remove
-BACK_COMPAT = int(marshmallow.__version__[0]) < 3
+MARSHMALLOW_2 = int(marshmallow.__version__[0]) < 3
 
 
 def make_paginated_response(query, url_path, schema, page, page_size):
@@ -37,7 +37,7 @@ def make_paginated_response(query, url_path, schema, page, page_size):
     query = query.offset(start).limit(page_size)
 
     # TODO: @will-norris backwards compat - remove
-    if BACK_COMPAT:
+    if MARSHMALLOW_2:
         return schema().dump({'data': query, **pagination_info}).data
     else:
         try:
@@ -66,7 +66,7 @@ def get_request_pagination(params=None, exc=DeserializationError):
     params = request.args
 
     # TODO: @will-norris backwards compat - remove
-    if BACK_COMPAT:
+    if MARSHMALLOW_2:
         data, errors = PaginationRequestSchema().load(params)
         if errors:
             raise exc('Error deserializing pagination options: {}'.format(errors))
@@ -90,7 +90,7 @@ def get_request_filters(schema, exc):
         exc: If there are any marshmallow validation errors deserializing request.args
     """
     # TODO: @will-norris backwards compat - remove
-    if BACK_COMPAT:
+    if MARSHMALLOW_2:
         data, errors = schema().load(request.args)
         if errors:
             raise exc('Error deserializing filters provided: {}'.format(errors))

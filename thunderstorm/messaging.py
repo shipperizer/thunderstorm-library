@@ -8,7 +8,7 @@ from statsd.defaults.env import statsd
 
 
 import marshmallow  # TODO: @will-norris backwards compat - remove
-BACK_COMPAT = int(marshmallow.__version__[0]) < 3
+MARSHMALLOW_2 = int(marshmallow.__version__[0]) < 3
 
 logger = get_task_logger(__name__)
 
@@ -73,7 +73,7 @@ def ts_task(event_name, schema):
             ts_message = TSMessage(message.pop('data'), message)
 
             # TODO: @will-norris backwards compat - remove
-            if BACK_COMPAT:
+            if MARSHMALLOW_2:
                 deserialized_data, errors = schema.load(ts_message)
                 if errors:
                     statsd.incr('tasks.{}.ts_task.errors.schema'.format(task_name))
@@ -147,7 +147,7 @@ def send_ts_task(event_name, schema, data, **kwargs):
     task_name = ts_task_name(event_name)
 
     # TODO: @will-norris backwards compat - remove
-    if BACK_COMPAT:
+    if MARSHMALLOW_2:
         data = schema.dump(data).data
 
         data, errors = schema.load(data)
