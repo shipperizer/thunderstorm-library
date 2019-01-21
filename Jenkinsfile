@@ -74,6 +74,7 @@ node('aam-identity-prodcd') {
                           "GITHUB_TOKEN=${env.GITHUB_TOKEN}",
                       ]) {
                           // create distribution
+                          sh 'sudo chmod -R 777 thunderstorm_library.egg-info/'
                           sh "make dist"
                           sh "./script/release.sh '${user}' '${repo}'"
                       }
