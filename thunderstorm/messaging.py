@@ -47,7 +47,7 @@ class TSMessage(collections.abc.Mapping):
         return iter(self.data)
 
 
-def ts_task(event_name, schema):
+def ts_task(event_name, schema, bind=False, **options):
     """Decorator for Thunderstorm messaging tasks
 
     The task name is derived from the event name.
@@ -62,6 +62,8 @@ def ts_task(event_name, schema):
     Args:
         event_name (str): The event name (this is also the routing key)
         schema (marshmallow.Schema): The schema instance expected by this task
+        bind (bool): if the task is bound
+        options (dict): extra options to be passed to the shared_task decorator
 
     Returns:
         A decorator function
@@ -69,7 +71,30 @@ def ts_task(event_name, schema):
     def decorator(task_func):
         task_name = ts_task_name(event_name)
 
-        def task_handler(message):
+        def task_handler(*args):
+            """
+            args can contain up to 2 items:
+            * if a bound task the first arg will be self and the second will be message
+            * if an unbound task, only one arg will be present and that will be the message
+
+            @ts_task(bind=True)
+            def task_a(self, message):
+                return message
+
+            @ts_task
+            def task_b(message):
+                return message
+            """
+            # if only one argument then it's not a bound task, if two then it is
+            # more than 2 args are not allowed
+            if len(args) == 1:
+                return _task_handler(message=args[0])
+            elif len(args) == 2:
+                return _task_handler(self=args[0], message=args[1])
+            else:
+                raise NotImplementedError('Maximum 2 parameters allowed for ts_task decorator')
+
+        def _task_handler(self=None, message=None):
             ts_message = TSMessage(message.pop('data'), message)
 
             # TODO: @will-norris backwards compat - remove
@@ -77,33 +102,29 @@ def ts_task(event_name, schema):
                 deserialized_data, errors = schema.load(ts_message)
                 if errors:
                     statsd.incr('tasks.{}.ts_task.errors.schema'.format(task_name))
-                    error_msg = 'inbound schema validation error for event {}'.format(event_name)  # noqa
-                    logger.error(
-                        error_msg,
-                        extra={'errors': errors, 'data': ts_message}
-                    )
+                    error_msg = 'inbound schema validation error for event {}'.format(event_name)
+                    logger.error(error_msg, extra={'errors': errors, 'data': ts_message})
                     raise SchemaError(error_msg, errors=errors, data=ts_message)
                 else:
                     logger.info('received ts_task on {}'.format(event_name))
                     ts_message.data = deserialized_data
-                    return task_func(ts_message)
+                    # passing task_func instead of passing self - @will-norris
+                    return task_func(self, ts_message) if bind else task_func(ts_message)
             else:
                 try:
                     deserialized_data = schema.load(ts_message)
                 except ValidationError as vex:
                     statsd.incr('tasks.{}.ts_task.errors.schema'.format(task_name))
-                    error_msg = 'inbound schema validation error for event {}'.format(event_name)  # noqa
-                    logger.error(
-                        error_msg,
-                        extra={'errors': vex.messages, 'data': ts_message}
-                    )
+                    error_msg = 'inbound schema validation error for event {}'.format(event_name)
+                    logger.error(error_msg, extra={'errors': vex.messages, 'data': ts_message})
                     raise SchemaError(error_msg, errors=vex.messages, data=ts_message)
                 else:
                     logger.info('received ts_task on {}'.format(event_name))
                     ts_message.data = deserialized_data
-                    return task_func(ts_message)
+                    # passing task_func instead of passing self - @will-norris
+                    return task_func(self, ts_message) if bind else task_func(ts_message)
 
-        return shared_task(name=task_name)(task_handler)
+        return shared_task(bind=bind, name=task_name, **options)(task_handler)
 
     return decorator
 

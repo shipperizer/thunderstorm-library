@@ -1,6 +1,7 @@
 from unittest.mock import patch, Mock
 from uuid import uuid4
 
+from celery import Task
 from marshmallow import Schema, fields
 import pytest
 
@@ -29,8 +30,8 @@ class FooSchema(Schema):
 
 @patch('thunderstorm.messaging.shared_task')
 def test_ts_task_calls_shared_task(mock_shared_task):
-    # act
-    @ts_task('foo.bar', schema=FooSchema)
+    # arrange
+    @ts_task('foo.bar', schema=FooSchema())
     def my_task(message):
         # since shared_task is patched the body of this task is never called
         pass
@@ -40,11 +41,58 @@ def test_ts_task_calls_shared_task(mock_shared_task):
 
     # assert
     mock_shared_task.assert_called_once_with(
-        name='handle_foo_bar'
+        bind=False, name='handle_foo_bar'
     )
 
 
-def test_ts_task_deserializes_data():
+@patch('thunderstorm.messaging.shared_task')
+def test_ts_task_calls_shared_task_with_task_options(mock_shared_task):
+    # arrange
+    task_options = {
+        'option1': '1',
+        'option2': '2'
+    }
+
+    @ts_task('foo.bar', schema=FooSchema(), **task_options)
+    def my_task(message):
+        # since shared_task is patched the body of this task is never called
+        pass
+
+    # act
+    my_task({'data': {'foo': 'bar'}, 'request_id': 123})
+
+    # assert
+    mock_shared_task.assert_called_once_with(
+        bind=False,
+        name='handle_foo_bar',
+        **task_options
+    )
+
+
+def test_ts_task_creates_bound_task_correctly(celery):
+    # arrange
+    @ts_task('foo.bar', schema=FooSchema(), bind=True)
+    def my_task(self, message):
+        assert message == {'foo': 'bar'}
+        assert isinstance(self, Task)
+
+    # act & assert
+    my_task({'data': {'foo': 'bar'}, 'request_id': 123})
+
+
+def test_ts_task_support_only_2_args_at_max(celery):
+    # arrange
+    @ts_task('foo.bar', schema=FooSchema(), bind=True)
+    def my_task(self, message, something_else):
+        assert message == {'foo': 'bar'}
+        assert isinstance(self, Task)
+
+    # act & assert
+    with pytest.raises(NotImplementedError):
+        my_task({'data': {'foo': 'bar'}, 'request_id': 123}, 'blah')
+
+
+def test_ts_task_deserializes_data(celery):
     # arrange
     some_uuid = uuid4()
 
@@ -109,7 +157,11 @@ def test_send_ts_task_raises_SchemaError_on_schema_validation_serilization(celer
     with pytest.raises(SchemaError):
         # act
         with patch.object(celery, 'send_task') as mock_send_task:
-            send_ts_task('foo.bar', FooSchema(many=False), {'baz': 'not_a_uuid'})
+            send_ts_task(
+                'foo.bar',
+                FooSchema(many=False),
+                {'baz': 'not_a_uuid'}
+            )
 
     # assert
     assert not mock_send_task.called
