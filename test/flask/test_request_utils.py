@@ -1,24 +1,29 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from marshmallow import fields, Schema
 
+from test.models import Random
 from thunderstorm.flask.exceptions import DeserializationError
 from thunderstorm.flask.request_utils import (
     get_pagination_info, paginate, get_request_filters, get_request_pagination,
     make_paginated_response
 )
+from thunderstorm.flask.schemas import PaginationSchema
 
 
-@pytest.mark.parametrize('page,page_size,num_records,prev_page,next_page,url', [
-    (1, 20, 40, None, '/foo/bar?page_size=20&page=2', '/foo/bar',),
-    (2, 20, 60, '/foo/bar?page_size=20&page=1', '/foo/bar?page_size=20&page=3', '/foo/bar',),
-    (1, 20, 3, None, None, '/foo/bar',),
-    (1, 20, 40, None, '/foo/bar?page_size=20&page=2', '/foo/bar',),
-    (1, 20, 40, None, '/foo/bar?page_size=20&page=2', '/foo/bar',),
-    (1, 20, 40, None, '/foo/bar?page_size=20&page=2', '/foo/bar?page_size=1000&page=50',),
+@pytest.mark.parametrize('page,page_size,num_records,ceiling,prev_page,next_page,url', [
+    (1, 20, 40, None, None, '/foo/bar?page_size=20&page=2', '/foo/bar'),
+    (2, 20, 60, None, '/foo/bar?page_size=20&page=1', '/foo/bar?page_size=20&page=3', '/foo/bar'),
+    (1, 20, 3, None, None, None, '/foo/bar'),
+    (1, 20, 40, None, None, '/foo/bar?page_size=20&page=2', '/foo/bar'),
+    (1, 20, 40, None, None, '/foo/bar?page_size=20&page=2', '/foo/bar'),
+    (1, 20, 40, None, None, '/foo/bar?page_size=20&page=2', '/foo/bar?page_size=1000&page=50'),
+    (1, 20, 40, 20, None, '/foo/bar?page_size=20&page=2', '/foo/bar?page_size=1000&page=50'),
+    (1, 20, 20, 20, None, '/foo/bar?page_size=20&page=2', '/foo/bar?page_size=1000&page=50'),
 ])
-def test_get_pagination_info(page, page_size, num_records, prev_page, next_page, url):
-    res = get_pagination_info(page, page_size, num_records, url)
+def test_get_pagination_info(page, page_size, num_records, ceiling, prev_page, next_page, url):
+    res = get_pagination_info(page, page_size, num_records, url, ceiling=ceiling)
     assert res.get('prev_page') == prev_page
     assert res.get('next_page') == next_page
     assert res['total_records'] == num_records
@@ -137,3 +142,50 @@ def test_make_response_success(mock_query, TestSchemaList, flask_app):
             'total_records': 50,
             'prev_page': None
         }
+
+
+@pytest.mark.parametrize('total_records, ceiling, result', [
+    (100, 150, 100),
+    (100, 15, 15),
+    (10000, 100, 100),
+    (10000, None, 10000)
+])
+def test_paginate_with_ceiling(total_records, ceiling, result, db_session, fixtures):
+    [fixtures.Random() for _ in range(total_records)] # noqa
+
+    res_query, res_page_info = paginate(db_session.query(Random), 1, 50, '/foo/bar', ceiling=ceiling)
+
+    assert not res_page_info.get('prev_page')
+    assert res_page_info.get('next_page')
+    assert res_page_info['total_records'] == result
+
+    assert res_query.all() == db_session.query(Random).limit(50).all()
+
+
+@pytest.mark.parametrize('total_records, ceiling, result', [
+    (100, 150, 100),
+    (100, 15, 15),
+    (10000, 100, 100),
+    (10000, None, 10000)
+])
+def test_make_paginated_response_with_ceiling(total_records, ceiling, result, db_session, fixtures, flask_app):
+    [fixtures.Random() for _ in range(total_records)] # noqa
+
+    class ApiSchema(PaginationSchema):
+        class RandomSchema(Schema):
+            uuid = fields.UUID()
+            name = fields.String()
+
+        data = fields.List(fields.Nested(RandomSchema))
+
+    with flask_app.test_request_context():
+        resp = make_paginated_response(db_session.query(Random), '/foo/bar', ApiSchema, 1, 50, ceiling=ceiling)
+
+    # assert
+    assert len(resp['data']) == 50
+    resp.pop('data')
+    assert resp == {
+        'next_page': '/foo/bar?page_size=50&page=2',
+        'total_records': result,
+        'prev_page': None
+    }
