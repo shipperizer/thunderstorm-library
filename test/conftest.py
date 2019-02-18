@@ -1,11 +1,19 @@
+from os import environ
 from unittest.mock import MagicMock
 
 import flask
+from factory.alchemy import SQLAlchemyModelFactory
 from marshmallow import fields, Schema
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, scoped_session
+import sqlalchemy_utils as sa_utils
 
 from thunderstorm.flask.headers import deprecated
 from thunderstorm.flask.schemas import PaginationSchema
+from test import models
+import test.fixtures
+
 
 
 @pytest.fixture
@@ -85,3 +93,55 @@ def TestSchemaList(TestSchema):
         data = fields.List(fields.Nested(TestSchema))
 
     return TestSchemaList
+
+
+#############################################################
+# DB FIXTURES
+#############################################################
+
+
+@pytest.fixture(scope='session')
+def db_uri():
+    db_name = environ['DB_NAME']
+    db_host = environ['DB_HOST']
+    db_user = environ['DB_USER']
+    db_pass = environ['DB_PASS']
+    return 'postgresql://{}:{}@{}:5432/{}'.format(db_user, db_pass, db_host, db_name)
+
+
+@pytest.fixture(scope='session')
+def test_database(db_uri):
+    if sa_utils.database_exists(db_uri):
+        sa_utils.drop_database(db_uri)
+
+    sa_utils.create_database(db_uri)
+
+    engine = create_engine(db_uri)
+    models.Base.metadata.create_all(engine)
+
+    return engine
+
+
+@pytest.fixture
+def db_connection(test_database):
+    with test_database.connect() as connection:
+        transaction = connection.begin()
+        yield connection
+        transaction.rollback()
+
+
+@pytest.fixture
+def db_session(db_connection):
+    session = scoped_session(sessionmaker(bind=db_connection))
+    yield session
+    session.close()
+
+
+@pytest.fixture
+def fixtures(db_session):
+    for item in dir(test.fixtures):
+        item = getattr(test.fixtures, item)
+        if isinstance(item, type) and issubclass(item, SQLAlchemyModelFactory):
+            item._meta.sqlalchemy_session = db_session
+
+    return test.fixtures

@@ -10,7 +10,7 @@ import marshmallow  # TODO: @will-norris backwards compat - remove
 MARSHMALLOW_2 = int(marshmallow.__version__[0]) < 3
 
 
-def make_paginated_response(query, url_path, schema, page, page_size):
+def make_paginated_response(query, url_path, schema, page, page_size, ceiling=None):
     """
     Take a sqlalchemy query and paginate it based on the args provided.
 
@@ -22,6 +22,7 @@ def make_paginated_response(query, url_path, schema, page, page_size):
         schema (Schema): Subclass of marshmallow.Schema
         page (int): Page number of the results page to return
         page_size (int): Number of results to return per page
+        ceiling (int): Limit to the count query
 
     Returns:
         dict: The structure of which conforms to the thunderstorm API
@@ -31,9 +32,9 @@ def make_paginated_response(query, url_path, schema, page, page_size):
         SerializationError: If serialization of the pagination info fails for any reason
     """
     start = (page - 1) * page_size
-    num_records = query.count()
+    num_records = query.limit(ceiling).count() if ceiling else query.count()
 
-    pagination_info = get_pagination_info(page, page_size, num_records, url_path)
+    pagination_info = get_pagination_info(page, page_size, num_records, url_path, ceiling=ceiling)
     query = query.offset(start).limit(page_size)
 
     # TODO: @will-norris backwards compat - remove
@@ -126,7 +127,7 @@ def _strip_query(url_path):
     return query
 
 
-def get_pagination_info(page, page_size, num_records, url_path):
+def get_pagination_info(page, page_size, num_records, url_path, ceiling=None):
     """
     Utility function for creating a dict of pagination information.
 
@@ -135,6 +136,7 @@ def get_pagination_info(page, page_size, num_records, url_path):
         page_size (int): Number of results to display per page
         num_records (int): Total number of records in the db for the given query
         url_path (str): Path of the URL the request was made to
+        ceiling (int): Limit to the count query
 
     Returns:
         dict: Dict containining pagination information. The structure of this
@@ -146,7 +148,11 @@ def get_pagination_info(page, page_size, num_records, url_path):
     # strip url to be just the path
     url_path = urlparse(url_path).path
 
-    next_page = page + 1 if page < num_records / page_size else None
+    # if num_records is equal ceiling assume there is more
+    if page < num_records / page_size or (ceiling and num_records == ceiling):
+        next_page = page + 1
+    else:
+        next_page = None
     prev_page = page - 1 if page != 1 else None
 
     pagination_info = {}
@@ -162,11 +168,12 @@ def get_pagination_info(page, page_size, num_records, url_path):
         pagination_info['prev_page'] = '{}&page={}'.format(base_url, prev_page)
 
     pagination_info['total_records'] = num_records
+
     return pagination_info
 
 
 # TODO: @will-norris Deprecate in favour of make_paginated_response
-def paginate(query, page, page_size, url_path):
+def paginate(query, page, page_size, url_path, ceiling=None):
     """
     Take a sqlalchemy query and paginate it based on the args provided.
 
@@ -177,13 +184,14 @@ def paginate(query, page, page_size, url_path):
         url_path (str): url_path that the request was sent to e.g. for the url
             'http://localhost/foo/bar/baz/' it would be '/foo/bar/baz'.
             Query parameters are stripped out by the get_pagination_info func.
+        ceiling (int): Limit to the count query
 
     Returns:
         tuple: (Paginated Query object applied to it, dict of pagination info)
     """
     start = (page - 1) * page_size
-    num_records = query.count()
+    num_records = query.limit(ceiling).count() if ceiling else query.count()
 
-    pagination_info = get_pagination_info(page, page_size, num_records, url_path)
+    pagination_info = get_pagination_info(page, page_size, num_records, url_path, ceiling=ceiling)
 
     return query.offset(start).limit(page_size), pagination_info

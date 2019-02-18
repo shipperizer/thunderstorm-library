@@ -35,7 +35,8 @@ node('aam-identity-prodcd') {
             withEnv([
               "REGISTRY=${registry}"
             ]) {
-              sh 'docker-compose down'
+              sh 'docker-compose up -d'
+              sh 'sleep 5'
               parallel 'python35': {
                 withEnv(["COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}35"]) {
                   sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=35 python35 make install test codacy"
@@ -53,7 +54,7 @@ node('aam-identity-prodcd') {
                 }
               }, 'compatibility-marshmallow-2.X': {
                 withEnv(["COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}36compat"]) {
-                  sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=36 -e COMPAT=compat python36 make install compat test codacy"
+                  sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=36 -e COMPAT=compat -e DB_NAME=test_auth_lib_py36_compat python36 make install compat test codacy"
                   junit 'results-36compat.xml'
                 }
               }
