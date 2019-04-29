@@ -1,5 +1,6 @@
 """Thunderstorm messaging helpers"""
 import collections
+import logging
 
 from celery.utils.log import get_task_logger
 from celery import current_app, shared_task
@@ -217,3 +218,64 @@ def send_ts_task(event_name, schema, data, **kwargs):
                 routing_key=event_name,
                 **kwargs
             )
+
+
+# ################################## KAFKA ############################### #
+
+def init_ts_kafka(faust_app):
+    def ts_event(topic, schema, *args, **kwargs):
+        """Decorator for Thunderstorm messaging events
+
+        Example:
+            @ts_event('domain.action.request', DomainActionRequestSchema())
+            async def handle_domain_action_request(message):
+                # do something with validated message
+
+        Args:
+            topic (str): The topic name
+            schema (marshmallow.Schema): The schema instance expected by this task
+
+        Returns:
+            A decorator function
+        """
+        _topic = faust_app.topic(topic, value_type=bytes)
+
+
+        def decorator(func):
+            async def event_handler(*args):
+
+                """
+                args can contain up to 1 item, which is the message
+
+                @ts_event
+                async def handle_message(message):
+                    return message
+
+                """
+                if len(args) == 1:
+                    return await _event_handler(args[0])
+                else:
+                    raise NotImplementedError('Maximum 1 parameter allowed for ts_task_v2 decorator')
+
+            async def _event_handler(stream):
+                # stream handling done in here, no need to do it inside the func
+                async for message in stream:
+                    ts_message = message.pop('data') or message
+
+                    try:
+                        deserialized_data = schema.load(ts_message)
+                    except ValidationError as vex:
+                        statsd.incr('tasks.{}.ts_event.errors.schema'.format(topic))
+                        error_msg = 'inbound schema validation error for event {}'.format(topic)
+                        logging.error(error_msg, extra={'errors': vex.messages, 'data': ts_message})
+                        raise SchemaError(error_msg, errors=vex.messages, data=ts_message)
+                    else:
+                        logging.info('received ts_event on {}'.format(topic))
+                        await func(deserialized_data)
+
+            return faust_app.agent(_topic, name=f'thunderstorm.messaging.{ts_task_name(topic)}')(event_handler)
+
+        return decorator
+
+    # create ts_event decorator on faust app
+    faust_app.ts_event = ts_event
