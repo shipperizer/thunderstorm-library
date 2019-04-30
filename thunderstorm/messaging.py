@@ -4,6 +4,8 @@ import logging
 
 from celery.utils.log import get_task_logger
 from celery import current_app, shared_task
+from kafka import KafkaProducer
+from marshmallow import Schema, fields
 from marshmallow.exceptions import ValidationError
 from statsd.defaults.env import statsd
 
@@ -238,9 +240,6 @@ def init_ts_kafka(faust_app):
         Returns:
             A decorator function
         """
-        _topic = faust_app.topic(topic, value_type=bytes)
-
-
         def decorator(func):
             async def event_handler(*args):
 
@@ -273,9 +272,89 @@ def init_ts_kafka(faust_app):
                         logging.info('received ts_event on {}'.format(topic))
                         await func(deserialized_data)
 
-            return faust_app.agent(_topic, name=f'thunderstorm.messaging.{ts_task_name(topic)}')(event_handler)
+            return faust_app.agent(topic, name=f'thunderstorm.messaging.{ts_task_name(topic)}')(event_handler)
 
         return decorator
 
     # create ts_event decorator on faust app
     faust_app.ts_event = ts_event
+
+
+class TSKafkaSendException(Exception):
+    pass
+
+
+class TSKafkaConnectException(Exception):
+    pass
+
+
+# Keep topic names and schemas together
+Event = collections.namedtuple('Event', ['schema', 'topic'])
+
+
+class TSKafkaProducer:
+    def __init__(self, brokers):
+        """
+        Create a new TSKafkaProducer
+
+        Args:
+            brokers (list): List of brokers to connect to e.g. ['kafka:9092']
+        """
+        self.brokers = brokers
+
+    def validate_data(self, data, event):
+        """
+        Validate message data by dumping to a string and loading it back
+
+        Args:
+            data (dict): Message to be serialized
+            event (namedtuple): Contains topic and schema
+
+        Returns:
+            bytes: Serialized message
+
+        Raises:
+            SchemaError: If message validation fails for any reason
+        """
+        class TSMessageSchema(Schema):
+            data = fields.Nested(event.schema)
+
+        try:
+            data = TSMessageSchema().dumps({'data': data})
+        except ValidationError as vex:
+            error_msg = 'Error serializing queue message data'
+            logger.error(error_msg, extra={'errors': vex.messages, 'data': data})
+            raise SchemaError(error_msg, errors=vex.messages, data=data)
+
+        try:
+            TSMessageSchema().loads(data)
+        except ValidationError as vex:
+            error_msg = 'Outbound schema validation error for event {}'.format(event.topic)  # noqa
+            logger.error(error_msg, extra={'errors': vex.messages, 'data': data})
+            raise SchemaError(error_msg, errors=vex.messages, data=data)
+
+        return data.encode('utf-8')
+
+    def send_ts_task(self, data, event):
+        """
+        Send a message to a kafka broker
+
+        Args:
+            event (namedtuple): Has attributes schema and topic
+            data (dict): Message you want to send via the message bus
+        """
+        serialized = self.validate_data(data, event)
+        producer = self.get_kafka_producer()
+        try:
+            producer.send(event.topic, value=serialized)  # send takes raw bytes
+            producer.flush()  # flush any pending messages
+        except Exception as ex:
+            raise TSKafkaSendException(f'Exception while pushing message to broker: {ex}')
+        finally:
+            producer.close()  # how long lived do we want connections to be?
+
+    def get_kafka_producer(self):
+        try:
+            return KafkaProducer(bootstrap_servers=self.brokers)
+        except Exception as ex:
+            raise TSKafkaConnectException(f'Exception while connecting to Kafka: {ex}')
