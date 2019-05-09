@@ -4,7 +4,6 @@ import logging
 from kafka import KafkaProducer
 from marshmallow import Schema, fields
 from marshmallow.exceptions import ValidationError
-from statsd.defaults.env import statsd
 
 from thunderstorm.shared import SchemaError, ts_task_name
 
@@ -53,12 +52,12 @@ def init_ts_kafka(faust_app):
                     try:
                         deserialized_data = schema.load(ts_message)
                     except ValidationError as vex:
-                        statsd.incr('tasks.{}.ts_event.errors.schema'.format(topic))
-                        error_msg = 'inbound schema validation error for event {}'.format(topic)
+                        faust_app.monitor.client.incr(f'event.{topic}.errors.schema')
+                        error_msg = f'inbound schema validation error for event {topic}'
                         logging.error(error_msg, extra={'errors': vex.messages, 'data': ts_message})
                         raise SchemaError(error_msg, errors=vex.messages, data=ts_message)
                     else:
-                        logging.info('received ts_event on {}'.format(topic))
+                        logging.debug(f'received ts_event on {topic}')
                         await func(deserialized_data)
 
             return faust_app.agent(topic, name=f'thunderstorm.messaging.{ts_task_name(topic)}')(event_handler)
@@ -116,7 +115,7 @@ class TSKafkaProducer:
             errors = schema.loads(data).errors
 
             if errors:
-                error_msg = 'Outbound schema validation error for event {}'.format(event.topic)  # noqa
+                error_msg = f'Outbound schema validation error for event {event.topic}'  # noqa
                 logging.error(error_msg, extra={'errors': errors, 'data': data})
                 raise SchemaError(error_msg, errors=errors, data=data)
 
@@ -131,7 +130,7 @@ class TSKafkaProducer:
             try:
                 schema.loads(data)
             except ValidationError as vex:
-                error_msg = 'Outbound schema validation error for event {}'.format(event.topic)  # noqa
+                error_msg = f'Outbound schema validation error for event {event.topic}'  # noqa
                 logging.error(error_msg, extra={'errors': vex.messages, 'data': data})
                 raise SchemaError(error_msg, errors=vex.messages, data=data)
 
