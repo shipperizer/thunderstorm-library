@@ -37,12 +37,7 @@ node('aam-identity-prodcd') {
             ]) {
               sh 'docker-compose up -d'
               sh 'sleep 5'
-              parallel 'python35': {
-                withEnv(["COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}35"]) {
-                  sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=35 python35 make install test codacy"
-                  junit 'results-35.xml'
-                }
-              }, 'python36': {
+              parallel 'python36': {
                 withEnv(["COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}36"]) {
                   sh "docker-compose run -e CODACY_PROJECT_TOKEN=${env.CODACY_PROJECT_TS_LIB_TOKEN} -e PYTHON_VERSION=36 python36 make install test codacy"
                   junit 'results-36.xml'
@@ -98,9 +93,7 @@ node('aam-identity-prodcd') {
         }
 
     } catch (err) {
-        junit 'results-35.xml'
-        junit 'results-36.xml'
-        junit 'results-37.xml'
+        junit 'results-*.xml'
         error 'Thunderstorm library build failed ${err}'
 
     } finally {
