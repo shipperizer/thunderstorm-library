@@ -6,30 +6,13 @@ from celery import current_app, shared_task
 from marshmallow.exceptions import ValidationError
 from statsd.defaults.env import statsd
 
+from thunderstorm.shared import SchemaError, ts_task_name
+
 
 import marshmallow  # TODO: @will-norris backwards compat - remove
 MARSHMALLOW_2 = int(marshmallow.__version__[0]) < 3
 
 logger = get_task_logger(__name__)
-
-
-def ts_task_name(event_name):
-    """Return the task name derived from the event name
-
-    This function implements the rules described in the Thunderstorm messaging
-    spec.
-
-    Args:
-        event_name (str): The event name (this is also the routing key)
-
-    Returns:
-        task_name (str)
-    """
-    task_name = event_name
-    for c in '.-':
-        task_name = task_name.replace(c, '_')
-
-    return 'handle_{}'.format(task_name)
 
 
 class TSMessage(collections.abc.Mapping):
@@ -127,16 +110,6 @@ def ts_task(event_name, schema, bind=False, **options):
         return shared_task(bind=bind, name=task_name, **options)(task_handler)
 
     return decorator
-
-
-class SchemaError(Exception):
-    def __init__(self, message, *, errors=None, data=None):
-        super().__init__(message)
-        self.errors = errors
-        self.data = data
-
-    def __str__(self):
-        return '{}: {} with {}'.format(super().__str__(), self.errors, self.data)
 
 
 def send_ts_task(event_name, schema, data, **kwargs):

@@ -9,6 +9,7 @@ def _read_requirements(requirements_filename):
 
 
 REQUIREMENTS = _read_requirements('requirements.txt')
+EXTRA_REQS = {'kafka': ['faust[statsd]<2,>=1.6', 'kafka-python<2,>=1']}
 
 
 setup(
@@ -17,4 +18,5 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=REQUIREMENTS,
+    extras_require=EXTRA_REQS
 )

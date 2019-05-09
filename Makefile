@@ -9,7 +9,7 @@ VERSION?=0.0.0
 
 install:
 	@echo "# --pre allows pre releases"
-	pip install --pre -e .
+	pip install --pre -e ".[kafka]"
 	pip install -r requirements-dev.txt
 
 compat:

@@ -1,20 +1,6 @@
 version: '2'
 
 services:
-  python35:
-    image: "${REGISTRY}/artsalliancemedia/python:3.5-slim"
-    command: make install test
-    working_dir: /var/app
-    volumes:
-      - ./:/var/app
-    environment:
-      - DB_NAME=test_auth_lib_py35
-      - DB_HOST=postgres
-      - DB_USER=postgres
-      - DB_PASS=postgres
-    depends_on:
-      - postgres
-
   python36:
     image: "${REGISTRY}/artsalliancemedia/python:3.6-slim"
     command: make install test
