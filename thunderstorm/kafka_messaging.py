@@ -89,6 +89,7 @@ class TSKafkaProducer:
             brokers (list or string): ['kafka:9092'] or 'kafka1:9092,kafka2:9092'
         """
         self.brokers = brokers
+        self.producer = self.get_kafka_producer()
 
     def validate_data(self, data, event):
         """
@@ -145,14 +146,10 @@ class TSKafkaProducer:
             data (dict): Message you want to send via the message bus
         """
         serialized = self.validate_data(data, event)
-        producer = self.get_kafka_producer()
         try:
-            producer.send(event.topic, value=serialized)  # send takes raw bytes
-            producer.flush()  # flush any pending messages
+            self.producer.send(event.topic, value=serialized)  # send takes raw bytes
         except Exception as ex:
             raise TSKafkaSendException(f'Exception while pushing message to broker: {ex}')
-        finally:
-            producer.close()  # how long lived do we want connections to be?
 
     def get_kafka_producer(self):
         try:
