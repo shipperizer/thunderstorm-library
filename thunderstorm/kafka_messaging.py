@@ -153,6 +153,10 @@ class TSKafkaProducer:
 
     def get_kafka_producer(self):
         try:
-            return KafkaProducer(bootstrap_servers=self.brokers)
+            return KafkaProducer(
+                bootstrap_servers=self.brokers,
+                connections_max_idle_ms=60000,
+                max_in_flight_requests_per_connection=25
+            )
         except Exception as ex:
             raise TSKafkaConnectException(f'Exception while connecting to Kafka: {ex}')
