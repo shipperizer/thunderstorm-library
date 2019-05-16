@@ -1,6 +1,7 @@
 import collections
 import logging
 
+import faust
 from kafka import KafkaProducer
 from marshmallow import Schema, fields
 from marshmallow.exceptions import ValidationError
@@ -11,46 +12,8 @@ from thunderstorm.shared import SchemaError, ts_task_name
 import marshmallow  # TODO: @will-norris backwards compat - remove
 MARSHMALLOW_2 = int(marshmallow.__version__[0]) < 3
 
-
-def init_ts_kafka(faust_app):
-    def ts_event(topic, schema, *args, **kwargs):
-        """Decorator for Thunderstorm messaging events
-
-        Example:
-            @ts_event('domain.action.request', DomainActionRequestSchema())
-            async def handle_domain_action_request(message):
-                # do something with validated message
-
-        Args:
-            topic (str): The topic name
-            schema (marshmallow.Schema): The schema instance expected by this task
-
-        Returns:
-            A decorator function
-        """
-        def decorator(func):
-            async def event_handler(stream):
-                # stream handling done in here, no need to do it inside the func
-                async for message in stream:
-                    ts_message = message.pop('data') or message
-
-                    try:
-                        deserialized_data = schema.load(ts_message)
-                    except ValidationError as vex:
-                        faust_app.monitor.client.incr(f'event.{topic}.errors.schema')
-                        error_msg = f'inbound schema validation error for event {topic}'
-                        logging.error(error_msg, extra={'errors': vex.messages, 'data': ts_message})
-                        raise SchemaError(error_msg, errors=vex.messages, data=ts_message)
-                    else:
-                        logging.debug(f'received ts_event on {topic}')
-                        yield await func(deserialized_data)
-
-            return faust_app.agent(topic, name=f'thunderstorm.messaging.{ts_task_name(topic)}')(event_handler)
-
-        return decorator
-
-    # create ts_event decorator on faust app
-    faust_app.ts_event = ts_event
+# Keep topic names and schemas together
+Event = collections.namedtuple('Event', ['schema', 'topic'])
 
 
 class TSKafkaSendException(Exception):
@@ -61,20 +24,18 @@ class TSKafkaConnectException(Exception):
     pass
 
 
-# Keep topic names and schemas together
-Event = collections.namedtuple('Event', ['schema', 'topic'])
+class TSKafka(faust.App):
+    """
+    Wrapper class for combining features of faust and Kafka-Python. The broker
+    argument can be passed as a string of the form 'kafka-1:9092,kafka-2:9092'
+    and the construcor will format the string as required by faust.
+    """
 
-
-class TSKafkaProducer:
-    def __init__(self, brokers):
-        """
-        Create a new TSKafkaProducer
-
-        Args:
-            brokers (list or string): ['kafka:9092'] or 'kafka1:9092,kafka2:9092'
-        """
-        self.brokers = brokers
-        self.producer = self.get_kafka_producer()
+    def __init__(self, *args, **kwargs):
+        self.broker = kwargs['broker']
+        self.kafka_producer = None
+        kwargs['broker'] = ';'.join([f'kafka://{broker}' for broker in kwargs['broker'].split(',')])
+        super().__init__(*args, **kwargs)
 
     def validate_data(self, data, event):
         """
@@ -124,24 +85,71 @@ class TSKafkaProducer:
 
     def send_ts_event(self, data, event):
         """
-        Send a message to a kafka broker
+        Send a message to a kafka broker. We only connect to kafka when first
+        sending a message.
 
         Args:
             event (namedtuple): Has attributes schema and topic
             data (dict): Message you want to send via the message bus
         """
         serialized = self.validate_data(data, event)
+
+        if not self.kafka_producer:
+            self.kafka_producer = self.get_kafka_producer()
+
         try:
-            self.producer.send(event.topic, value=serialized)  # send takes raw bytes
+            self.kafka_producer.send(event.topic, value=serialized)  # send takes raw bytes
         except Exception as ex:
             raise TSKafkaSendException(f'Exception while pushing message to broker: {ex}')
 
     def get_kafka_producer(self):
+        """
+        Return a KafkaProducer instance with sensible defaults
+        """
         try:
             return KafkaProducer(
-                bootstrap_servers=self.brokers,
+                bootstrap_servers=self.broker,
                 connections_max_idle_ms=60000,
                 max_in_flight_requests_per_connection=25
             )
         except Exception as ex:
             raise TSKafkaConnectException(f'Exception while connecting to Kafka: {ex}')
+
+    def ts_event(self, event, *args, **kwargs):
+        """Decorator for Thunderstorm messaging events
+
+        Example:
+            @ts_event('domain.action.request', DomainActionRequestSchema())
+            async def handle_domain_action_request(message):
+                # do something with validated message
+
+        Args:
+            topic (str): The topic name
+            schema (marshmallow.Schema): The schema instance expected by this task
+
+        Returns:
+            A decorator function
+        """
+        topic = event.topic
+        schema = event.schema()
+
+        def decorator(func):
+            async def event_handler(stream):
+                # stream handling done in here, no need to do it inside the func
+                async for message in stream:
+                    ts_message = message.pop('data') or message
+
+                    try:
+                        deserialized_data = schema.load(ts_message)
+                    except ValidationError as vex:
+                        self.monitor.client.incr(f'event.{topic}.errors.schema')
+                        error_msg = f'inbound schema validation error for event {topic}'
+                        logging.error(error_msg, extra={'errors': vex.messages, 'data': ts_message})
+                        raise SchemaError(error_msg, errors=vex.messages, data=ts_message)
+                    else:
+                        logging.debug(f'received ts_event on {topic}')
+                        yield await func(deserialized_data)
+
+            return self.agent(topic, name=f'thunderstorm.messaging.{ts_task_name(topic)}')(event_handler)
+
+        return decorator
