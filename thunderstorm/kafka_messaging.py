@@ -29,22 +29,7 @@ def init_ts_kafka(faust_app):
             A decorator function
         """
         def decorator(func):
-            async def event_handler(*args):
-
-                """
-                args can contain up to 1 item, which is the message
-
-                @ts_event
-                async def handle_message(message):
-                    return message
-
-                """
-                if len(args) == 1:
-                    return await _event_handler(args[0])
-                else:
-                    raise NotImplementedError('Maximum 1 parameter allowed for ts_task_v2 decorator')
-
-            async def _event_handler(stream):
+            async def event_handler(stream):
                 # stream handling done in here, no need to do it inside the func
                 async for message in stream:
                     ts_message = message.pop('data') or message
@@ -58,7 +43,7 @@ def init_ts_kafka(faust_app):
                         raise SchemaError(error_msg, errors=vex.messages, data=ts_message)
                     else:
                         logging.debug(f'received ts_event on {topic}')
-                        await func(deserialized_data)
+                        yield await func(deserialized_data)
 
             return faust_app.agent(topic, name=f'thunderstorm.messaging.{ts_task_name(topic)}')(event_handler)
 
