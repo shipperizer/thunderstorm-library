@@ -153,7 +153,7 @@ def fixtures(db_session):
 #############################################################
 
 @pytest.fixture
-def tskafka():
+def kafka_app():
     return TSKafka(
         'test-service',
         broker="kafka-1:9092,kafka-2:9092,kafka-3:9092"
