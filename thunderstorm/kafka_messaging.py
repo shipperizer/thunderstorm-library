@@ -13,7 +13,7 @@ import marshmallow  # TODO: @will-norris backwards compat - remove
 MARSHMALLOW_2 = int(marshmallow.__version__[0]) < 3
 
 # Keep topic names and schemas together
-Event = collections.namedtuple('Event', ['schema', 'topic'])
+Event = collections.namedtuple('Event', ['topic', 'schema'])
 
 
 class TSKafkaSendException(Exception):
@@ -118,14 +118,14 @@ class TSKafka(faust.App):
     def ts_event(self, event, *args, **kwargs):
         """Decorator for Thunderstorm messaging events
 
-        Example:
-            @ts_event('domain.action.request', DomainActionRequestSchema())
+        Examples:
+            @ts_event(Event('domain.action.request', DomainActionRequestSchema))
             async def handle_domain_action_request(message):
                 # do something with validated message
 
         Args:
             topic (str): The topic name
-            schema (marshmallow.Schema): The schema instance expected by this task
+            schema (marshmallow.Schema): The schema class expected by this task
 
         Returns:
             A decorator function
