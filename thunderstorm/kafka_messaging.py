@@ -58,14 +58,21 @@ class TSKafka(faust.App):
 
         # Marshmallow 2 compatibility - remove when no longer needed
         if MARSHMALLOW_2:
-            data = schema.dumps(data).data
+            serialized_data, errors = schema.dumps({'data': data})
+
+            if errors:
+                error_msg = 'Error serializing queue message data.'
+                logging.error(error_msg, extra={'errors': errors, 'data': data})
+                raise SchemaError(error_msg, errors=errors, data=data)
+            else:
+                data = serialized_data
+
             errors = schema.loads(data).errors
 
             if errors:
-                error_msg = f'Outbound schema validation error for event {event.topic}'  # noqa
+                error_msg = f'Outbound schema validation error for event {event.topic}'
                 logging.error(error_msg, extra={'errors': errors, 'data': data})
                 raise SchemaError(error_msg, errors=errors, data=data)
-
         else:
             try:
                 data = schema.dumps({'data': data})
@@ -77,7 +84,7 @@ class TSKafka(faust.App):
             try:
                 schema.loads(data)
             except ValidationError as vex:
-                error_msg = f'Outbound schema validation error for event {event.topic}'  # noqa
+                error_msg = f'Outbound schema validation error for event {event.topic}'
                 logging.error(error_msg, extra={'errors': vex.messages, 'data': data})
                 raise SchemaError(error_msg, errors=vex.messages, data=data)
 
@@ -139,16 +146,25 @@ class TSKafka(faust.App):
                 async for message in stream:
                     ts_message = message.pop('data') or message
 
-                    try:
-                        deserialized_data = schema.load(ts_message)
-                    except ValidationError as vex:
-                        self.monitor.client.incr(f'event.{topic}.errors.schema')
-                        error_msg = f'inbound schema validation error for event {topic}'
-                        logging.error(error_msg, extra={'errors': vex.messages, 'data': ts_message})
-                        raise SchemaError(error_msg, errors=vex.messages, data=ts_message)
+                    # Marshmallow 2 compatibility - remove when no longer needed
+                    if MARSHMALLOW_2:
+                        deserialized_data, errors = schema.load(ts_message)
+                        if errors:
+                            self.monitor.client.incr(f'event.{topic}.errors.schema')
+                            error_msg = f'Inbound schema validation error for event {event.topic}'
+                            logging.error(error_msg, extra={'errors': errors, 'data': ts_message})
+                            raise SchemaError(error_msg, errors=errors, data=ts_message)
                     else:
-                        logging.debug(f'received ts_event on {topic}')
-                        yield await func(deserialized_data)
+                        try:
+                            deserialized_data = schema.load(ts_message)
+                        except ValidationError as vex:
+                            self.monitor.client.incr(f'event.{topic}.errors.schema')
+                            error_msg = f'Inbound schema validation error for event {topic}'
+                            logging.error(error_msg, extra={'errors': vex.messages, 'data': ts_message})
+                            raise SchemaError(error_msg, errors=vex.messages, data=ts_message)
+
+                    logging.debug(f'received ts_event on {topic}')
+                    yield await func(deserialized_data)
 
             return self.agent(topic, name=f'thunderstorm.messaging.{ts_task_name(topic)}')(event_handler)
 
