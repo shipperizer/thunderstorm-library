@@ -11,6 +11,7 @@ import sqlalchemy_utils as sa_utils
 
 from thunderstorm.flask.headers import deprecated
 from thunderstorm.flask.schemas import PaginationSchema
+from thunderstorm.kafka_messaging import TSKafka, Event
 from test import models
 import test.fixtures
 
@@ -145,3 +146,20 @@ def fixtures(db_session):
             item._meta.sqlalchemy_session = db_session
 
     return test.fixtures
+
+
+#############################################################
+# KAFKA FIXTURES
+#############################################################
+
+@pytest.fixture
+def kafka_app():
+    return TSKafka(
+        'test-service',
+        broker="kafka-1:9092,kafka-2:9092,kafka-3:9092"
+    )
+
+
+@pytest.fixture
+def TestEvent(TestSchema):
+    return Event(topic='test-topic', schema=TestSchema)
