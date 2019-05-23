@@ -90,7 +90,7 @@ class TSKafka(faust.App):
 
         return data.encode('utf-8')
 
-    def send_ts_event(self, data, event):
+    def send_ts_event(self, data, event, key=None):
         """
         Send a message to a kafka broker. We only connect to kafka when first
         sending a message.
@@ -98,6 +98,10 @@ class TSKafka(faust.App):
         Args:
             event (namedtuple): Has attributes schema and topic
             data (dict): Message you want to send via the message bus
+            key (str): Key to use when routing messages to a partition - It is
+            recommended you use the resource identifier so all messages relating
+            to a particular resource get routed to the same partition. A value of
+            None will cause messages to randomly sent to different partitions
         """
         serialized = self.validate_data(data, event)
 
@@ -105,7 +109,7 @@ class TSKafka(faust.App):
             self.kafka_producer = self.get_kafka_producer()
 
         try:
-            self.kafka_producer.send(event.topic, value=serialized)  # send takes raw bytes
+            self.kafka_producer.send(event.topic, value=serialized, key=key)  # send takes raw bytes
         except Exception as ex:
             raise TSKafkaSendException(f'Exception while pushing message to broker: {ex}')
 
@@ -117,7 +121,8 @@ class TSKafka(faust.App):
             return KafkaProducer(
                 bootstrap_servers=self.broker,
                 connections_max_idle_ms=60000,
-                max_in_flight_requests_per_connection=25
+                max_in_flight_requests_per_connection=25,
+                key_serializer=lambda x: x.encode()
             )
         except Exception as ex:
             raise TSKafkaConnectException(f'Exception while connecting to Kafka: {ex}')
