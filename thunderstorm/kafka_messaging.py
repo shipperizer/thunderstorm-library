@@ -122,7 +122,7 @@ class TSKafka(faust.App):
                 bootstrap_servers=self.broker,
                 connections_max_idle_ms=60000,
                 max_in_flight_requests_per_connection=25,
-                key_serializer=lambda x: x.encode()
+                key_serializer=lambda x: x.encode() if x else None
             )
         except Exception as ex:
             raise TSKafkaConnectException(f'Exception while connecting to Kafka: {ex}')
