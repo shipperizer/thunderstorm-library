@@ -127,7 +127,7 @@ class TSKafka(faust.App):
         except Exception as ex:
             raise TSKafkaConnectException(f'Exception while connecting to Kafka: {ex}')
 
-    def ts_event(self, event, *args, **kwargs):
+    def ts_event(self, event, log_only=(), *args, **kwargs):
         """Decorator for Thunderstorm messaging events
 
         Examples:
@@ -138,6 +138,8 @@ class TSKafka(faust.App):
         Args:
             topic (str): The topic name
             schema (marshmallow.Schema): The schema class expected by this task
+            log_only (tuple): Tuple of exception classes which can be
+                logged as errors and then ignored
 
         Returns:
             A decorator function
@@ -169,7 +171,14 @@ class TSKafka(faust.App):
                             raise SchemaError(error_msg, errors=vex.messages, data=ts_message)
 
                     logging.debug(f'received ts_event on {topic}')
-                    yield await func(deserialized_data)
+
+                    try:
+                        yield await func(deserialized_data)
+                    except Exception as ex:
+                        if isinstance(ex, log_only):
+                            logging.error(ex)
+                        else:
+                            raise
 
             return self.agent(topic, name=f'thunderstorm.messaging.{ts_task_name(topic)}')(event_handler)
 
