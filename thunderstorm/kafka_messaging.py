@@ -1,7 +1,11 @@
 import collections
 import logging
+from typing import Any
 
 import faust
+from faust.sensors.monitor import Monitor
+from faust.sensors.statsd import StatsdMonitor
+from faust.types import StreamT, TP, Message
 from kafka import KafkaProducer
 from marshmallow import Schema, fields
 from marshmallow.exceptions import ValidationError
@@ -22,6 +26,37 @@ class TSKafkaSendException(Exception):
 
 class TSKafkaConnectException(Exception):
     pass
+
+
+class TSStatsdMonitor(StatsdMonitor):
+    def __init__(
+        self,
+        host: str = 'localhost',
+        port: int = 8125,
+        prefix: str = 'x.faust',
+        rate: float = 1.0,
+        **kwargs: Any
+    ) -> None:
+        super().__init__(host=host, port=port, prefix=f'{prefix}.faust', rate=rate, **kwargs)
+
+    def _stream_label(self, stream: StreamT) -> str:
+        """
+        Enhance original __styream_label function,
+        it converts "topic_pos-week.fetch" -> "pos-week_fetch"
+        """
+        label = super()._stream_label(stream=stream)
+        return label.replace('topic_', '').replace('.', '_')
+
+    def on_message_in(self, tp: TP, offset: int, message: Message) -> None:
+        """Call before message is delegated to streams."""
+        super(Monitor, self).on_message_in(tp, offset, message)
+
+        topic = tp.topic.replace('.', '_')
+
+        self.client.incr('messages_received', rate=self.rate)
+        self.client.incr('messages_active', rate=self.rate)
+        self.client.incr(f'topic.{topic}.messages_received', rate=self.rate)
+        self.client.gauge(f'read_offset.{topic}.{tp.partition}', offset)
 
 
 class TSKafka(faust.App):
