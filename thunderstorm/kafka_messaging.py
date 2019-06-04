@@ -41,7 +41,7 @@ class TSStatsdMonitor(StatsdMonitor):
 
     def _stream_label(self, stream: StreamT) -> str:
         """
-        Enhance original __styream_label function,
+        Enhance original _stream_label function
         it converts "topic_pos-week.fetch" -> "pos-week_fetch"
         """
         label = super()._stream_label(stream=stream)
@@ -162,7 +162,7 @@ class TSKafka(faust.App):
         except Exception as ex:
             raise TSKafkaConnectException(f'Exception while connecting to Kafka: {ex}')
 
-    def ts_event(self, event, log_only=(), *args, **kwargs):
+    def ts_event(self, event, catch_exc=(), *args, **kwargs):
         """Decorator for Thunderstorm messaging events
 
         Examples:
@@ -173,7 +173,7 @@ class TSKafka(faust.App):
         Args:
             topic (str): The topic name
             schema (marshmallow.Schema): The schema class expected by this task
-            log_only (tuple): Tuple of exception classes which can be
+            catch_exc (tuple): Tuple of exception classes which can be
                 logged as errors and then ignored
 
         Returns:
@@ -209,11 +209,8 @@ class TSKafka(faust.App):
 
                     try:
                         yield await func(deserialized_data)
-                    except Exception as ex:
-                        if isinstance(ex, log_only):
-                            logging.error(ex)
-                        else:
-                            raise
+                    except catch_exc as ex:
+                        logging.error(ex)
 
             return self.agent(topic, name=f'thunderstorm.messaging.{ts_task_name(topic)}')(event_handler)
 
