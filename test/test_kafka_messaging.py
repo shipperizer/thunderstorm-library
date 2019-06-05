@@ -102,6 +102,38 @@ async def test_TSKafka_ts_event_calls_wrapped_function(kafka_app, TestEvent):
 
 
 @pytest.mark.asyncio
+async def test_TSKafka_ts_event_does_not_raise_if_catch_exc_set(kafka_app, TestEvent):
+    # arrange
+    message = {'data': {'int_1': 3, 'int_2': 6}}
+
+    # decorated agent
+    @kafka_app.ts_event(TestEvent, catch_exc=ValueError)
+    async def test_function(message):
+        raise ValueError()
+
+    # act
+    async with test_function.test_context() as agent:
+        await agent.put(message.copy())
+
+
+
+@pytest.mark.asyncio
+async def test_TSKafka_ts_event_raises_if_catch_exc_unset(kafka_app, TestEvent):
+    # arrange
+    message = {'data': {'int_1': 3, 'int_2': 6}}
+
+    # decorated agent
+    @kafka_app.ts_event(TestEvent)
+    async def test_function(message):
+        raise ValueError()
+
+    # act
+    async with test_function.test_context() as agent:
+        with pytest.raises(ValueError):
+            await agent.put(message.copy())
+
+
+@pytest.mark.asyncio
 async def test_TSKafka_ts_event_increases_metric_count_and_raises_SchemaError_for_bad_data(kafka_app, TestEvent):
     # arrange
     kafka_app.monitor = MagicMock()
