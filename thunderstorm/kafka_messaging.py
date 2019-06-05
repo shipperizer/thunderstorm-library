@@ -211,6 +211,7 @@ class TSKafka(faust.App):
                         yield await func(deserialized_data)
                     except catch_exc as ex:
                         logging.error(ex)
+                        yield
 
             return self.agent(topic, name=f'thunderstorm.messaging.{ts_task_name(topic)}')(event_handler)
 
