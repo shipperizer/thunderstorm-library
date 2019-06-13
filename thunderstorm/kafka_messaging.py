@@ -70,6 +70,9 @@ class TSKafka(faust.App):
         self.broker = kwargs['broker']
         self.kafka_producer = None
         kwargs['broker'] = ';'.join([f'kafka://{broker}' for broker in kwargs['broker'].split(',')])
+        # overriding default value of 40.0 to make it bigger that the broker_session_timeout
+        # see https://github.com/robinhood/faust/issues/259#issuecomment-487907514
+        kwargs['broker_request_timeout'] = 90.0
         super().__init__(*args, **kwargs)
 
     def validate_data(self, data, event):
