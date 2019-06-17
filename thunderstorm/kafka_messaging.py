@@ -184,6 +184,7 @@ class TSKafka(faust.App):
         """
         topic = event.topic
         schema = event.schema()
+        topic_name = topic.replace('.', '_')
 
         def decorator(func):
             async def event_handler(stream):
@@ -195,15 +196,17 @@ class TSKafka(faust.App):
                     if MARSHMALLOW_2:
                         deserialized_data, errors = schema.load(ts_message)
                         if errors:
-                            self.monitor.client.incr(f'event.{topic}.errors.schema')
-                            error_msg = f'Inbound schema validation error for event {event.topic}'
+                            if hasattr(self.monitor, 'client'):
+                                self.monitor.client.incr(f'stream.{topic_name}.schema.errors')
+                            error_msg = f'Inbound schema validation error for event {topic}'
                             logging.error(error_msg, extra={'errors': errors, 'data': ts_message})
                             raise SchemaError(error_msg, errors=errors, data=ts_message)
                     else:
                         try:
                             deserialized_data = schema.load(ts_message)
                         except ValidationError as vex:
-                            self.monitor.client.incr(f'event.{topic}.errors.schema')
+                            if hasattr(self.monitor, 'client'):
+                                self.monitor.client.incr(f'stream.{topic_name}.schema.errors')
                             error_msg = f'Inbound schema validation error for event {topic}'
                             logging.error(error_msg, extra={'errors': vex.messages, 'data': ts_message})
                             raise SchemaError(error_msg, errors=vex.messages, data=ts_message)
@@ -213,6 +216,8 @@ class TSKafka(faust.App):
                     try:
                         yield await func(deserialized_data)
                     except catch_exc as ex:
+                        if hasattr(self.monitor, 'client'):
+                            self.monitor.client.incr(f'stream.{topic_name}.execution.errors')
                         logging.error(ex)
                         yield
 
