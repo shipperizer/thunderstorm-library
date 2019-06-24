@@ -153,12 +153,15 @@ class TSKafka(faust.App):
             None will cause messages to randomly sent to different partitions
         """
         serialized = self.validate_data(data, event)
+        topic_name = event.topic.replace('.', '_')
 
         if not self.kafka_producer:
             self.kafka_producer = self.get_kafka_producer()
 
         try:
             self.kafka_producer.send(event.topic, value=serialized, key=key)  # send takes raw bytes
+            if hasattr(self.monitor, 'client'):
+                self.monitor.client.incr(f'stream.{topic_name}.messages.sent')
         except Exception as ex:
             raise TSKafkaSendException(f'Exception while pushing message to broker: {ex}')
 
@@ -230,6 +233,15 @@ class TSKafka(faust.App):
                         if hasattr(self.monitor, 'client'):
                             self.monitor.client.incr(f'stream.{topic_name}.execution.errors')
                         logging.error(ex)
+                        if self.sentry:
+                            sentry_sdk.capture_exception(ex)
+                        yield
+                    except Exception as ex:  # catch all exceptions to avoid worker failure and restart
+                        if hasattr(self.monitor, 'client'):
+                            self.monitor.client.incr(f'stream.{topic_name}.critical.errors')
+                        logging.critical(ex)
+                        if self.sentry:
+                            sentry_sdk.capture_exception(ex)
                         yield
 
             return self.agent(topic, name=f'thunderstorm.messaging.{ts_task_name(topic)}')(event_handler)
