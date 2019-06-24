@@ -9,6 +9,7 @@ from faust.types import StreamT, TP, Message
 from kafka import KafkaProducer
 from marshmallow import Schema, fields
 from marshmallow.exceptions import ValidationError
+import sentry_sdk
 
 from thunderstorm.shared import SchemaError, ts_task_name
 
@@ -73,7 +74,17 @@ class TSKafka(faust.App):
         # overriding default value of 40.0 to make it bigger that the broker_session_timeout
         # see https://github.com/robinhood/faust/issues/259#issuecomment-487907514
         kwargs['broker_request_timeout'] = 90.0
+
+        # sentry config
+        dsn, environment, release = [kwargs.pop(kwarg, None) for kwarg in ['sentry_dsn', 'environment', 'release']]
+        self.sentry = self._init_sentry(dsn, environment, release)
+
         super().__init__(*args, **kwargs)
+
+    def _init_sentry(self, dsn, environment=None, release=None):
+        if dsn is None:
+            return None
+        return sentry_sdk.init(dsn=dsn, environment=environment, release=release)
 
     def validate_data(self, data, event):
         """
@@ -142,12 +153,15 @@ class TSKafka(faust.App):
             None will cause messages to randomly sent to different partitions
         """
         serialized = self.validate_data(data, event)
+        topic_name = event.topic.replace('.', '_')
 
         if not self.kafka_producer:
             self.kafka_producer = self.get_kafka_producer()
 
         try:
             self.kafka_producer.send(event.topic, value=serialized, key=key)  # send takes raw bytes
+            if hasattr(self.monitor, 'client'):
+                self.monitor.client.incr(f'stream.{topic_name}.messages.sent')
         except Exception as ex:
             raise TSKafkaSendException(f'Exception while pushing message to broker: {ex}')
 
@@ -219,6 +233,15 @@ class TSKafka(faust.App):
                         if hasattr(self.monitor, 'client'):
                             self.monitor.client.incr(f'stream.{topic_name}.execution.errors')
                         logging.error(ex)
+                        if self.sentry:
+                            sentry_sdk.capture_exception(ex)
+                        yield
+                    except Exception as ex:  # catch all exceptions to avoid worker failure and restart
+                        if hasattr(self.monitor, 'client'):
+                            self.monitor.client.incr(f'stream.{topic_name}.critical.errors')
+                        logging.critical(ex)
+                        if self.sentry:
+                            sentry_sdk.capture_exception(ex)
                         yield
 
             return self.agent(topic, name=f'thunderstorm.messaging.{ts_task_name(topic)}')(event_handler)
