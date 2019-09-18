@@ -156,6 +156,9 @@ def fixtures(db_session):
 def kafka_app():
     return TSKafka(
         'test-service',
+        debug=False,
+        ts_log_level='INFO',
+        ts_service_name='test-service',
         broker="kafka-1:9092,kafka-2:9092,kafka-3:9092"
     )
 

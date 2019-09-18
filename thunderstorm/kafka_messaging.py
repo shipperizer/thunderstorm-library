@@ -3,15 +3,16 @@ import logging
 from typing import Any
 
 import faust
+import sentry_sdk
 from faust.sensors.monitor import Monitor
 from faust.sensors.statsd import StatsdMonitor
 from faust.types import StreamT, TP, Message
 from kafka import KafkaProducer
 from marshmallow import Schema, fields
 from marshmallow.exceptions import ValidationError
-import sentry_sdk
-
+from thunderstorm.logging.kafka import KafkaRequestIDFilter
 from thunderstorm.shared import SchemaError, ts_task_name
+from thunderstorm.logging import get_log_level, ts_stream_handler, ts_logging_config
 
 
 import marshmallow  # TODO: @will-norris backwards compat - remove
@@ -75,8 +76,31 @@ class TSKafka(faust.App):
         # see https://github.com/robinhood/faust/issues/259#issuecomment-487907514
         kwargs['broker_request_timeout'] = 90.0
 
+        ts_service = kwargs.get('ts_service_name')
+        if not ts_service:
+            logging.warn('ts_service_name is not given, logger will not be unified.')
+        else:
+            ts_service = ts_service.replace('-', '_')
+
+            ts_log_level = kwargs.get('ts_log_level')
+            if not ts_log_level:
+                ts_log_level = 'INFO'
+                logging.warn('ts_log_level is not given, set to INFO as default.')
+
+            try:
+                get_log_level(ts_log_level)   # for verify
+                log_level = ts_log_level.upper()
+            except ValueError as vex:
+                log_level = 'INFO'
+                logging.warn(f'{vex}')
+
+            kwargs['loghandlers'] = [ts_stream_handler(KafkaRequestIDFilter())]
+            kwargs['logging_config'] = ts_logging_config(ts_service, log_level)
+
         # sentry config
-        dsn, environment, release = [kwargs.pop(kwarg, None) for kwarg in ['sentry_dsn', 'environment', 'release']]
+        dsn, environment, release = [
+            kwargs.pop(kwarg, None) for kwarg in ['sentry_dsn', 'environment', 'release']
+        ]
         self.sentry = self._init_sentry(dsn, environment, release)
 
         super().__init__(*args, **kwargs)

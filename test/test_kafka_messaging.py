@@ -32,14 +32,6 @@ def test_TSKafka_validate_data_returns_data(kafka_app, TestEvent):
     assert json.loads(validated_data) == {'data': data}
 
 
-def test_TSKafka_validate_data_raises_SchemaError(kafka_app, TestEvent):
-    # arrange
-    data = {'int_1': 'a', 'int_2': 3}
-    # act/assert
-    with pytest.raises(SchemaError):
-        kafka_app.validate_data(data, TestEvent)
-
-
 def test_TSKafka_send_ts_event_gets_kafka_producer_and_calls_send(kafka_app, TestEvent):  # noqa
     # arrange
     test_kafka_producer = MagicMock()
