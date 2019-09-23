@@ -78,21 +78,21 @@ class TSKafka(faust.App):
 
         ts_service = kwargs.get('ts_service_name')
         if not ts_service:
-            logging.warn('ts_service_name is not given, logger will not be unified.')
+            logging.warning('ts_service_name is not given, logger will not be unified.')
         else:
             ts_service = ts_service.replace('-', '_')
 
             ts_log_level = kwargs.get('ts_log_level')
             if not ts_log_level:
                 ts_log_level = 'INFO'
-                logging.warn('ts_log_level is not given, set to INFO as default.')
+                logging.warning('ts_log_level is not given, set to INFO as default.')
 
             try:
                 get_log_level(ts_log_level)   # for verify
                 log_level = ts_log_level.upper()
             except ValueError as vex:
                 log_level = 'INFO'
-                logging.warn(f'{vex}')
+                logging.warning(f'{vex}')
 
             kwargs['loghandlers'] = [ts_stream_handler(KafkaRequestIDFilter())]
             kwargs['logging_config'] = ts_logging_config(ts_service, log_level)
