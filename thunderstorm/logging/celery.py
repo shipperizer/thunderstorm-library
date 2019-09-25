@@ -13,7 +13,10 @@ from celery import Task as CeleryTask
 from celery.signals import setup_logging
 from celery._state import get_current_task
 
-from . import _register_id_getter, get_log_level, get_request_id, ts_stream_handler, TS_REQUEST_ID
+from . import (
+    _register_id_getter, get_log_level, get_request_id,
+    ts_stream_handler, setup_root_logger, TS_REQUEST_ID
+)
 
 __all__ = ['init_app', 'TSCeleryTask']
 
@@ -64,6 +67,11 @@ def init_app(app: CeleryTask):
     ts_service = app.conf['TS_SERVICE_NAME']
     ts_service = ts_service.replace('-', '')
 
+    # setup root logger
+    logger = setup_root_logger(
+        ts_service, log_level, CeleryTaskFilter()
+    )
+
     def _setup_logger():
         def do_setup_logging(**kwargs):
             del celery.utils.log.task_logger.handlers[:]
@@ -84,6 +92,8 @@ def init_app(app: CeleryTask):
         return do_setup_logging
 
     setup_logging.connect(_setup_logger(), weak=False)
+
+    logger.info(f'Celery logging has been setup with logger {ts_service}.')
 
 
 _register_id_getter(get_celery_request_id)

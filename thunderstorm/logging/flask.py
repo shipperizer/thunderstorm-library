@@ -11,7 +11,10 @@ import logging
 from flask import g, request, Flask
 from flask.ctx import has_request_context
 
-from . import _register_id_getter, get_log_level, get_request_id, ts_stream_handler, TS_REQUEST_ID
+from . import (
+    _register_id_getter, get_log_level, get_request_id,
+    ts_stream_handler, setup_root_logger, TS_REQUEST_ID
+)
 
 __all__ = ['init_app']
 
@@ -51,10 +54,8 @@ def init_app(app: Flask):
     ts_service = ts_service.replace('-', '_')
 
     # setup root logger
-    logger = logging.getLogger(ts_service)
-    logger.setLevel(log_level)
-    logger.addHandler(
-        ts_stream_handler(FlaskRequestIDFilter())
+    logger = setup_root_logger(
+        ts_service, log_level, FlaskRequestIDFilter()
     )
 
     # override flask logger

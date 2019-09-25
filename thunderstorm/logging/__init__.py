@@ -6,7 +6,9 @@ See:
     thunderstorm.logging.celery
 """
 
-__all__ = ['gen_trace_id', 'get_request_id', 'ts_stream_handler', 'ts_logging_config']
+__all__ = [
+    'gen_trace_id', 'get_request_id', 'ts_stream_handler', 'ts_logging_config', 'setup_root_logger'
+]
 
 
 _REQUEST_ID_GETTERS = []
@@ -100,3 +102,15 @@ def ts_logging_config(ts_service, log_level):
     }
 
     return logging_config
+
+
+def setup_root_logger(ts_service, log_level, log_filter):
+    """ used in flask & celery init, as we setup logger in faust and
+    use the same logger, we don't need to call setup_root_logger in kafka init again"""
+    logger = logging.getLogger(ts_service)
+    logger.setLevel(log_level)
+    logger.addHandler(
+        ts_stream_handler(log_filter)
+    )
+
+    return logger
