@@ -11,7 +11,6 @@ def _read_requirements(requirements_filename):
 REQUIREMENTS = _read_requirements('requirements.txt')
 EXTRA_REQS = {'kafka': ['faust[statsd]<2,>=1.6', 'kafka-python<2,>=1']}
 
-
 setup(
     name=thunderstorm.__title__,
     version=thunderstorm.__version__,
