@@ -65,7 +65,7 @@ def get_celery_request_id():
 def init_app(app: CeleryTask):
     log_level = get_log_level(app.conf['TS_LOG_LEVEL'])
     ts_service = app.conf['TS_SERVICE_NAME']
-    ts_service = ts_service.replace('-', '')
+    ts_service = ts_service.replace('-', '_')
 
     # setup root logger
     logger = setup_root_logger(
