@@ -39,6 +39,9 @@ def get_flask_request_id():
         str: the current request ID
     """
     if has_request_context():
+        if TS_REQUEST_ID in request.headers:
+            return request.headers[TS_REQUEST_ID]
+
         if 'request_id' in g:
             return g.request_id
 
