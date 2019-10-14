@@ -2,26 +2,22 @@ import collections
 from urllib.parse import urlparse
 
 import requests
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry
 
 
 DEFAULT_SESSION_POOL_SIZE = 10
-
 DEFAULT_TIMEOUT = 5
-DEFAULT_RETRY_TIMES = 3
 DEFAULT_BACKOFF_FACTOR = 0.3
-DEFAULT_STATUS_FORCELIST = (500, 502, 504)
+DEFAULT_MAX_TRIES = 3
+
+STATUS_FORCELIST = (500, 502, 504)
 
 KEY_TIMEOUT = "timeout"
-KEY_MAX_RETRY_TIMES = "max_retry"
+KEY_MAX_TRIES = "max_tries"
 
 
 class SessionPool(collections.OrderedDict):
-    'Limit size, evicting the least recently looked-up key when full'
-
-    def __init__(self, maxsize=128, *args, **kwds):
-        self.maxsize = maxsize
+    def __init__(self, max_size=128, *args, **kwds):
+        self.max_size = max_size
         super().__init__(*args, **kwds)
 
     def __getitem__(self, key):
@@ -31,18 +27,18 @@ class SessionPool(collections.OrderedDict):
 
     def __setitem__(self, key, value):
         super().__setitem__(key, value)
-        if len(self) > self.maxsize:
+        if len(self) > self.max_size:
             oldest = next(iter(self))
             oldest.close()
             del self[oldest]
 
 
 class HttpClient:
-
-    def __init__(self, max_retries=DEFAULT_RETRY_TIMES, logger=None,):
-        self.sessions = SessionPool(maxsize=DEFAULT_SESSION_POOL_SIZE)
+    """ Non thread-safety HTTP client
+    """
+    def __init__(self, session_size=DEFAULT_SESSION_POOL_SIZE, logger=None):
+        self.sessions = SessionPool(max_size=session_size)
         self.logger = logger
-        self.max_retries = max_retries
 
     def _get_session(self, url):
         host = urlparse(url).netloc
@@ -54,24 +50,49 @@ class HttpClient:
 
     def _new_session(self):
         session = requests.Session()
-        retry = Retry(
-            total=self.max_retries,
-            read=self.max_retries,
-            connect=self.max_retries,
-            backoff_factor=DEFAULT_BACKOFF_FACTOR,
-            status_forcelist=DEFAULT_STATUS_FORCELIST,
-        )
-        adapter = HTTPAdapter(max_retries=retry)
-        session.mount('http://', adapter)
-        session.mount('https://', adapter)
         return session
+
+    def _log(self, ex):
+        if ex is None:
+            return
+
+        if self.logger is not None:
+            self.logger.error(ex)
+        else:
+            print(ex)
+
+    def _request_with_session(self, session, method, url, max_tries, **kwargs):
+        while max_tries > 0:
+            max_tries -= 1
+            ex = None
+            try:
+                r = session.request(method, url, **kwargs)
+                if r.status_code in STATUS_FORCELIST:
+                    r.raise_for_status()
+                return r
+            except requests.exceptions.HTTPError as errh:
+                ex = errh
+            except requests.exceptions.ConnectionError as errc:
+                ex = errc
+            except requests.exceptions.Timeout as errt:
+                ex = errt
+            except requests.exceptions.RequestException as err:
+                ex = err
+            finally:
+                self._log(ex)
+        raise ex
 
     def _request(self, method, url, **kwargs):
         if KEY_TIMEOUT not in kwargs:
             kwargs[KEY_TIMEOUT] = DEFAULT_TIMEOUT
 
+        max_tries = DEFAULT_MAX_TRIES
+        if KEY_MAX_TRIES in kwargs:
+            max_tries = kwargs.pop(KEY_MAX_TRIES)
+
+        max_tries = max_tries if max_tries > 0 else 1
         session = self._get_session(url)
-        return session.request(method, url, **kwargs)
+        return self._request_with_session(session, method, url, max_tries, **kwargs)
 
     def get(self, url, params=None, **kwargs):
         r"""Sends a GET request.
