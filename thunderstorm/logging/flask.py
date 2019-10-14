@@ -13,7 +13,7 @@ from flask.ctx import has_request_context
 
 from . import (
     _register_id_getter, get_log_level, get_request_id,
-    ts_stream_handler, setup_root_logger, TS_REQUEST_ID
+    setup_ts_logger, ts_json_handler, ts_stream_handler, TS_REQUEST_ID
 )
 
 __all__ = ['init_app']
@@ -48,32 +48,37 @@ def get_flask_request_id():
     return None
 
 
-def init_app(app: Flask):
+def init_app(
+    flask_app: Flask, add_json_handler: bool = False
+):
     """Initialise logging request handler on a Flask app
     This handler adds a Flask access log
     """
-    log_level = get_log_level(app.config['TS_LOG_LEVEL'])
-    ts_service = app.config['TS_SERVICE_NAME']
+    ts_service = flask_app.config['TS_SERVICE_NAME']
     ts_service = ts_service.replace('-', '_')
+    log_level = get_log_level(flask_app.config['TS_LOG_LEVEL'])
 
-    # setup root logger
-    logger = setup_root_logger(
-        ts_service, log_level, FlaskRequestIDFilter()
-    )
+    log_filter = FlaskRequestIDFilter()
+    stream_handler = ts_stream_handler(log_filter)
 
-    # override flask logger
-    del app.logger.handlers[:]
-    app.logger.name = ts_service
-    app.logger.setLevel(log_level)
-    app.logger.addHandler(
-        ts_stream_handler(FlaskRequestIDFilter())
-    )
+    del flask_app.logger.handlers[:]
+    flask_app.logger.name = ts_service
+    flask_app.logger.setLevel(log_level)
+    flask_app.logger.addHandler(stream_handler)
 
-    @app.before_request
+    logger = setup_ts_logger(ts_service, log_level, log_filter)
+    if add_json_handler:
+        json_handler = ts_json_handler(
+            'flask', ts_service, log_filter
+        )
+        logger.addHandler(json_handler)
+        flask_app.logger.addHandler(json_handler)
+
+    @flask_app.before_request
     def before_request():
         g.request_id = get_request_id()
 
-    @app.after_request
+    @flask_app.after_request
     def after_request(response):
         level = logging.ERROR if response.status_code // 100 == 5 else logging.INFO
         extra = {
