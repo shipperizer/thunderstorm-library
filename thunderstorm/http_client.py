@@ -1,13 +1,14 @@
-import collections
-from urllib.parse import urlparse
+from queue import Queue
+import time
 
 import requests
 
 
-DEFAULT_SESSION_POOL_SIZE = 10
+DEFAULT_SESSION_POOL_SIZE = 20
 DEFAULT_TIMEOUT = 5
 DEFAULT_BACKOFF_FACTOR = 0.3
 DEFAULT_MAX_TRIES = 3
+DEFAULT_POOL_TIMEOUT = 5
 
 STATUS_FORCELIST = (500, 502, 504)
 
@@ -15,22 +16,22 @@ KEY_TIMEOUT = "timeout"
 KEY_MAX_TRIES = "max_tries"
 
 
-class SessionPool(collections.OrderedDict):
-    def __init__(self, max_size=128, *args, **kwds):
+class SessionPool:
+    def __init__(self, max_size):
         self.max_size = max_size
-        super().__init__(*args, **kwds)
+        self.pool = Queue(max_size)
 
-    def __getitem__(self, key):
-        value = super().__getitem__(key)
-        self.move_to_end(key)
-        return value
+        for _ in range(max_size):
+            self.pool.put(requests.Session())
 
-    def __setitem__(self, key, value):
-        super().__setitem__(key, value)
-        if len(self) > self.max_size:
-            oldest = next(iter(self))
-            oldest.close()
-            del self[oldest]
+    def get(self, block=True, timeout=None):
+        return self.pool.get(block, timeout)
+
+    def put(self, session):
+        self.pool.put(session)
+
+    def size(self):
+        return self.pool.qsize()
 
 
 class HttpClient:
@@ -39,18 +40,6 @@ class HttpClient:
     def __init__(self, session_size=DEFAULT_SESSION_POOL_SIZE, logger=None):
         self.sessions = SessionPool(max_size=session_size)
         self.logger = logger
-
-    def _get_session(self, url):
-        host = urlparse(url).netloc
-        session = self.sessions.get(host)
-        if session is None:
-            session = self._new_session()
-            self.sessions[host] = session
-        return session
-
-    def _new_session(self):
-        session = requests.Session()
-        return session
 
     def _log(self, ex):
         if ex is None:
@@ -62,8 +51,7 @@ class HttpClient:
             print(ex)
 
     def _request_with_session(self, session, method, url, max_tries, **kwargs):
-        while max_tries > 0:
-            max_tries -= 1
+        for i in range(max_tries):
             ex = None
             try:
                 r = session.request(method, url, **kwargs)
@@ -80,6 +68,9 @@ class HttpClient:
                 ex = err
             finally:
                 self._log(ex)
+
+            if (i + 1) != max_tries:
+                time.sleep((i + 1) * DEFAULT_BACKOFF_FACTOR)
         raise ex
 
     def _request(self, method, url, **kwargs):
@@ -91,8 +82,16 @@ class HttpClient:
             max_tries = kwargs.pop(KEY_MAX_TRIES)
 
         max_tries = max_tries if max_tries > 0 else 1
-        session = self._get_session(url)
-        return self._request_with_session(session, method, url, max_tries, **kwargs)
+        session = self.sessions.get(timeout=DEFAULT_POOL_TIMEOUT)
+
+        try:
+            resp = self._request_with_session(session, method, url, max_tries, **kwargs)
+            self.sessions.put(session)
+        except Exception as ex:
+            self.sessions.put(session)
+            raise ex
+
+        return resp
 
     def get(self, url, params=None, **kwargs):
         r"""Sends a GET request.
