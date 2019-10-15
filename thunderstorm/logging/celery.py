@@ -7,15 +7,15 @@ Usage:
     >>> app = Celery('ts-service-name', broker=broker_cnx)
     >>> init_logging(app)
 """
-import logging
 import celery
+import logging
 from celery import Task as CeleryTask
 from celery.signals import setup_logging
 from celery._state import get_current_task
 
 from . import (
     _register_id_getter, get_log_level, get_request_id,
-    ts_stream_handler, setup_root_logger, TS_REQUEST_ID
+    setup_ts_logger, ts_json_handler, ts_stream_handler, TS_REQUEST_ID
 )
 
 __all__ = ['init_app', 'TSCeleryTask']
@@ -62,38 +62,44 @@ def get_celery_request_id():
     return None
 
 
-def init_app(app: CeleryTask):
-    log_level = get_log_level(app.conf['TS_LOG_LEVEL'])
-    ts_service = app.conf['TS_SERVICE_NAME']
+def init_app(
+    celery_app: celery.Celery, init_ts_logger: bool = False, add_json_handler: bool = False
+):
+    ts_service = celery_app.conf['TS_SERVICE_NAME']
     ts_service = ts_service.replace('-', '_')
+    log_level = get_log_level(celery_app.conf['TS_LOG_LEVEL'])
 
-    # setup root logger
-    logger = setup_root_logger(
-        ts_service, log_level, CeleryTaskFilter()
-    )
+    log_filter = CeleryTaskFilter()
+    json_handler = ts_json_handler('celery', ts_service, log_filter)
+    if init_ts_logger:
+        logger = setup_ts_logger(ts_service, log_level, log_filter)
+        if add_json_handler:
+            logger.addHandler(json_handler)
+
+        logger.info('setting up ts_logger')
 
     def _setup_logger():
         def do_setup_logging(**kwargs):
+            stream_handler = ts_stream_handler(log_filter)
+
             del celery.utils.log.task_logger.handlers[:]
             celery.utils.log.task_logger.propagate = True
             celery.utils.log.task_logger.name = ts_service
-            celery.utils.log.task_logger.addHandler(ts_stream_handler(
-                CeleryTaskFilter()
-            ))
             celery.utils.log.task_logger.setLevel(log_level)
+            celery.utils.log.task_logger.addHandler(stream_handler)
 
             del celery.utils.log.worker_logger.handlers[:]
             celery.utils.log.worker_logger.propagate = True
             celery.utils.log.worker_logger.name = ts_service
-            celery.utils.log.worker_logger.addHandler(ts_stream_handler(
-                CeleryTaskFilter()
-            ))
             celery.utils.log.worker_logger.setLevel(log_level)
+            celery.utils.log.worker_logger.addHandler(stream_handler)
+
+            if add_json_handler:
+                celery.utils.log.task_logger.addHandler(json_handler)
+                celery.utils.log.worker_logger.addHandler(json_handler)
+
         return do_setup_logging
-
     setup_logging.connect(_setup_logger(), weak=False)
-
-    logger.info(f'Celery logging has been setup with logger {ts_service}.')
 
 
 _register_id_getter(get_celery_request_id)

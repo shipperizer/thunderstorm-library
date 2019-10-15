@@ -10,9 +10,10 @@ from faust.types import StreamT, TP, Message
 from kafka import KafkaProducer
 from marshmallow import Schema, fields
 from marshmallow.exceptions import ValidationError
-from thunderstorm.logging.kafka import KafkaRequestIDFilter
+from thunderstorm.logging import get_request_id
 from thunderstorm.shared import SchemaError, ts_task_name
-from thunderstorm.logging import get_log_level, ts_stream_handler, ts_logging_config
+from thunderstorm.logging.kafka import KafkaRequestIDFilter
+from thunderstorm.logging import get_log_level, ts_json_handler, ts_stream_handler
 
 
 import marshmallow  # TODO: @will-norris backwards compat - remove
@@ -54,7 +55,6 @@ class TSStatsdMonitor(StatsdMonitor):
         super(Monitor, self).on_message_in(tp, offset, message)
 
         topic = tp.topic.replace('.', '_')
-
         self.client.incr('messages_received', rate=self.rate)
         self.client.incr('messages_active', rate=self.rate)
         self.client.incr(f'topic.{topic}.messages_received', rate=self.rate)
@@ -92,10 +92,26 @@ class TSKafka(faust.App):
                 log_level = ts_log_level.upper()
             except ValueError as vex:
                 log_level = 'INFO'
-                logging.warning(f'{vex}')
+                logging.warning(f'{log_level} {vex}')
 
-            kwargs['loghandlers'] = [ts_stream_handler(KafkaRequestIDFilter())]
-            kwargs['logging_config'] = ts_logging_config(ts_service, log_level)
+            kwargs['logging_config'] = {
+                'version': 1,
+                'loggers': {
+                    ts_service: {
+                        'propagate': True,
+                        'level': log_level
+                    }
+                },
+                'disable_existing_loggers': True
+            }
+
+            log_filter = KafkaRequestIDFilter()
+            kwargs['loghandlers'] = [ts_stream_handler(log_filter)]
+            add_json_handler = kwargs.get('add_json_handler', False)
+            if add_json_handler:
+                kwargs['loghandlers'].append(
+                    ts_json_handler('kafka', ts_service, log_filter)
+                )
 
         # sentry config
         dsn, environment, release = [
@@ -126,16 +142,18 @@ class TSKafka(faust.App):
         """
         class TSMessageSchema(Schema):
             data = fields.Nested(event.schema)
+            trace_id = fields.String(required=False, default=None)
 
         schema = TSMessageSchema()
 
         # Marshmallow 2 compatibility - remove when no longer needed
+        trace_id = get_request_id()
         if MARSHMALLOW_2:
-            serialized_data, errors = schema.dumps({'data': data})
+            serialized_data, errors = schema.dumps({'data': data, 'trace_id': trace_id})
 
             if errors:
                 error_msg = 'Error serializing queue message data.'
-                logging.error(error_msg, extra={'errors': errors, 'data': data})
+                logging.error(error_msg, extra={'errors': errors, 'data': data, 'trace_id': trace_id})
                 raise SchemaError(error_msg, errors=errors, data=data)
             else:
                 data = serialized_data
@@ -148,10 +166,10 @@ class TSKafka(faust.App):
                 raise SchemaError(error_msg, errors=errors, data=data)
         else:
             try:
-                data = schema.dumps({'data': data})
+                data = schema.dumps({'data': data, 'trace_id': trace_id})
             except ValidationError as vex:
                 error_msg = 'Error serializing queue message data'
-                logging.error(error_msg, extra={'errors': vex.messages, 'data': data})
+                logging.error(error_msg, extra={'errors': vex.messages, 'data': data, 'trace_id': trace_id})
                 raise SchemaError(error_msg, errors=vex.messages, data=data)
 
             try:

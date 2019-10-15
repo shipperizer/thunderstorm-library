@@ -23,13 +23,17 @@ def test_TSKafka_init_sets_kafka_producer_to_None(kafka_app):
     assert kafka_app.kafka_producer is None
 
 
-def test_TSKafka_validate_data_returns_data(kafka_app, TestEvent):
+@patch('thunderstorm.kafka_messaging.get_request_id')
+def test_TSKafka_validate_data_returns_data(get_request_id, kafka_app, TestEvent):
     # arrange
     data = {'int_1': 3, 'int_2': 6}
+    get_request_id.return_value = 'abcd_trace_id'
+
     # act
     validated_data = kafka_app.validate_data(data, TestEvent)
+
     # assert
-    assert json.loads(validated_data) == {'data': data}
+    assert json.loads(validated_data) == {'data': data, 'trace_id': 'abcd_trace_id'}
 
 
 def test_TSKafka_send_ts_event_gets_kafka_producer_and_calls_send(kafka_app, TestEvent):  # noqa
