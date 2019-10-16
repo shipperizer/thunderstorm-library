@@ -1,15 +1,27 @@
 import queue
+import random
 
 import requests
 import pytest
 
 from thunderstorm.http_client import (SessionPool, HttpClient)
 
-urls = [
-    "https://www.baidu.com",
-    "https://www.qq.com",
-    "https://www.taobao.com",
-]
+
+@pytest.fixture(scope="session")
+def urls():
+    base_urls = [
+        'https://www.baidu.com',
+        'https://www.qq.com',
+        'https://www.taobao.com',
+        'https://www.alibaba.com'
+    ]
+
+    rv = []
+    for url in base_urls:
+        rv.extend([url] * random.randint(5, 10))
+
+    random.shuffle(rv)
+    return rv
 
 
 @pytest.fixture(scope="session")
@@ -44,22 +56,21 @@ def test_http_client():
     assert http_client.sessions.size() == 1
 
 
-def test_http_client_with_multi_urls():
+def test_http_client_with_multi_urls(urls):
     http_client = HttpClient(1)
     for url in urls:
         assert http_client.get(url).status_code == 200
 
 
-def test_requests_get(benchmark, http_client):
-
+def test_http_client_get(benchmark, http_client, urls):
     @benchmark
     def request_mulit_url():
         for url in urls:
-            http_client.get(url)
+            assert http_client.get(url).status_code == 200
 
 
-def test_http_client_get(benchmark):
+def test_requests_get(benchmark, urls):
     @benchmark
     def request_mulit_url():
         for url in urls:
-            requests.get(url)
+            assert requests.get(url).status_code == 200
