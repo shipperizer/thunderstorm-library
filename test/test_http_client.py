@@ -70,7 +70,13 @@ def test_http_client_reuqest_multi_method():
         assert f(url).status_code == 200
 
 
-def test_http_client_with_multi_urls(urls):
+def test_http_client_with_multi_urls():
+    urls = [
+        "https://www.baidu.com",
+        "https://www.qq.com",
+        "https://www.taobao.com",
+        "https://www.alibaba.com"
+    ]
     http_client = HttpClient(1)
     for url in urls:
         assert http_client.get(url).status_code == 200

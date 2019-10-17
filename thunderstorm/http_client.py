@@ -51,8 +51,8 @@ class HttpClient:
             print(ex)
 
     def _request_with_session(self, session, method, url, max_tries, **kwargs):
+        ex = None
         for i in range(max_tries):
-            ex = None
             try:
                 r = session.request(method, url, **kwargs)
                 if r.status_code in STATUS_FORCELIST:
@@ -68,10 +68,10 @@ class HttpClient:
                 ex = err
             finally:
                 self._log(ex)
-
             if (i + 1) != max_tries:
                 time.sleep((i + 1) * DEFAULT_BACKOFF_FACTOR)
-        raise ex
+        else:
+            raise ex
 
     def _request(self, method, url, **kwargs):
         if KEY_TIMEOUT not in kwargs:
