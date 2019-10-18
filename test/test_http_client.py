@@ -1,16 +1,16 @@
-import queue
-import random
+import json
 
 import requests
 import pytest
+import urllib3
 
-from thunderstorm.http_client import (SessionPool, HttpClient)
+from thunderstorm.http_client import (HttpClient)
 
 
 @pytest.fixture(scope="session")
 def urls():
     rv = [
-        'https://www.alibaba.com' for _ in range(20)
+        'https://www.baidu.com' for _ in range(20)
     ]
     return rv
 
@@ -20,40 +20,24 @@ def http_client():
     return HttpClient()
 
 
-def test_session_pool():
-    pool = SessionPool(2)
-
-    session = pool.get()
-    assert isinstance(session, requests.Session)
-
-    pool.get()
-    with pytest.raises(queue.Empty):
-        pool.get(False)
-
-
 def test_http_client():
-    http_client = HttpClient(1)
-    assert http_client.sessions.size() == 1
+    http_client = HttpClient()
 
     url = "http://httpbin.org/status/200"
     r = http_client.get(url)
-    assert r.status_code == 200
+    assert r.status == 200
 
     url = "http://httpbin.org/status/404"
     r = http_client.get(url)
-    assert r.status_code == 404
+    assert r.status == 404
 
     url = "http://httpbin.org/delay/2"
-    with pytest.raises(requests.exceptions.Timeout):
+    with pytest.raises(urllib3.exceptions.MaxRetryError):
         http_client.get(url, timeout=1)
-
-    assert http_client.sessions.size() == 1
 
 
 def test_http_client_reuqest_multi_method():
-    http_client = HttpClient(1)
-    assert http_client.sessions.size() == 1
-
+    http_client = HttpClient()
     url = "http://httpbin.org/status/200"
     methods = [
         "get",
@@ -67,7 +51,7 @@ def test_http_client_reuqest_multi_method():
 
     for m in methods:
         f = getattr(http_client, m)
-        assert f(url).status_code == 200
+        assert f(url).status == 200
 
 
 def test_http_client_with_multi_urls():
@@ -77,16 +61,39 @@ def test_http_client_with_multi_urls():
         "https://www.taobao.com",
         "https://www.alibaba.com"
     ]
-    http_client = HttpClient(1)
+    http_client = HttpClient()
     for url in urls:
-        assert http_client.get(url).status_code == 200
+        assert http_client.get(url).status == 200
+
+
+def test_http_client_post_put_method():
+    http_client = HttpClient()
+
+    data_payload = "hello, world"
+    json_payload = {"hello": "world"}
+
+    for method in ["put", "post"]:
+        url = "http://httpbin.org/{}".format(method)
+        f = getattr(http_client, method)
+
+        resp = f(url, data=data_payload)
+        assert resp.status == 200
+
+        content = json.loads(resp.data)
+        assert not content['json']
+
+        resp = f(url, json=json_payload)
+        assert resp.status == 200
+
+        content = json.loads(resp.data)
+        assert content['json'] == json_payload
 
 
 def test_http_client_get(benchmark, http_client, urls):
     @benchmark
     def request_mulit_url():
         for url in urls:
-            assert http_client.get(url).status_code == 200
+            assert http_client.get(url).status == 200
 
 
 def test_requests_get(benchmark, urls):

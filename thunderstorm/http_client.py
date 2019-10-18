@@ -1,7 +1,7 @@
-from queue import Queue
-import time
+import json as json_package
 
-import requests
+import urllib3
+from urllib3.util.retry import Retry
 
 
 DEFAULT_SESSION_POOL_SIZE = 20
@@ -16,29 +16,11 @@ KEY_TIMEOUT = "timeout"
 KEY_MAX_TRIES = "max_tries"
 
 
-class SessionPool:
-    def __init__(self, max_size):
-        self.max_size = max_size
-        self.pool = Queue(max_size)
-
-        for _ in range(max_size):
-            self.pool.put(requests.Session())
-
-    def get(self, block=True, timeout=None):
-        return self.pool.get(block, timeout)
-
-    def put(self, session):
-        self.pool.put(session)
-
-    def size(self):
-        return self.pool.qsize()
-
-
 class HttpClient:
     """ Non thread-safety HTTP client
     """
     def __init__(self, session_size=DEFAULT_SESSION_POOL_SIZE, logger=None):
-        self.sessions = SessionPool(max_size=session_size)
+        self.pool = urllib3.PoolManager(num_pools=session_size)
         self.logger = logger
 
     def _log(self, ex):
@@ -50,29 +32,6 @@ class HttpClient:
         else:
             print(ex)
 
-    def _request_with_session(self, session, method, url, max_tries, **kwargs):
-        ex = None
-        for i in range(max_tries):
-            try:
-                r = session.request(method, url, **kwargs)
-                if r.status_code in STATUS_FORCELIST:
-                    r.raise_for_status()
-                return r
-            except requests.exceptions.HTTPError as errh:
-                ex = errh
-            except requests.exceptions.ConnectionError as errc:
-                ex = errc
-            except requests.exceptions.Timeout as errt:
-                ex = errt
-            except requests.exceptions.RequestException as err:
-                ex = err
-            finally:
-                self._log(ex)
-            if (i + 1) != max_tries:
-                time.sleep((i + 1) * DEFAULT_BACKOFF_FACTOR)
-        else:
-            raise ex
-
     def _request(self, method, url, **kwargs):
         if KEY_TIMEOUT not in kwargs:
             kwargs[KEY_TIMEOUT] = DEFAULT_TIMEOUT
@@ -82,13 +41,18 @@ class HttpClient:
             max_tries = kwargs.pop(KEY_MAX_TRIES)
 
         max_tries = max_tries if max_tries > 0 else 1
-        session = self.sessions.get(timeout=DEFAULT_POOL_TIMEOUT)
+        if max_tries > 1:
+            kwargs['retries'] = Retry(
+                total=max_tries,
+                status_forcelist=STATUS_FORCELIST,
+                backoff_factor=DEFAULT_BACKOFF_FACTOR
+            )
+        else:
+            kwargs['retries'] = False
 
         try:
-            resp = self._request_with_session(session, method, url, max_tries, **kwargs)
-            self.sessions.put(session)
+            resp = self.pool.request(method, url, **kwargs)
         except Exception as ex:
-            self.sessions.put(session)
             raise ex
 
         return resp
@@ -102,10 +66,11 @@ class HttpClient:
         :return: :class:`Response <Response>` object
         :rtype: requests.Response
         """
-        return self._request("GET", url, params=params, **kwargs)
+        return self._request("GET", url, fields=params, **kwargs)
 
     def options(self, url, **kwargs):
         r"""Sends an OPTIONS request.
+
         :param url: URL for the new :class:`Request` object.
         :param \*\*kwargs: Optional arguments that ``request`` takes.
         :return: :class:`Response <Response>` object
@@ -115,6 +80,7 @@ class HttpClient:
 
     def head(self, url, **kwargs):
         r"""Sends a HEAD request.
+
         :param url: URL for the new :class:`Request` object.
         :param \*\*kwargs: Optional arguments that ``request`` takes. If
             `allow_redirects` is not provided, it will be set to `False` (as
@@ -126,18 +92,7 @@ class HttpClient:
 
     def post(self, url, data=None, json=None, **kwargs):
         r"""Sends a POST request.
-        :param url: URL for the new :class:`Request` object.
-        :param data: (optional) Dictionary, list of tuples, bytes, or file-like
-            object to send in the body of the :class:`Request`.
-        :param json: (optional) json data to send in the body of the :class:`Request`.
-        :param \*\*kwargs: Optional arguments that ``request`` takes.
-        :return: :class:`Response <Response>` object
-        :rtype: requests.Response
-        """
-        return self._request("POST", url, data=data, json=json, **kwargs)
 
-    def put(self, url, data=None, **kwargs):
-        r"""Sends a PUT request.
         :param url: URL for the new :class:`Request` object.
         :param data: (optional) Dictionary, list of tuples, bytes, or file-like
             object to send in the body of the :class:`Request`.
@@ -146,10 +101,36 @@ class HttpClient:
         :return: :class:`Response <Response>` object
         :rtype: requests.Response
         """
-        return self._request("PUT", url, data=data, **kwargs)
+        if json is not None:
+            data = json_package.dumps(json).encode('utf-8')
+            headers = kwargs.get('headers', {})
+            if 'Content-Type' not in headers:
+                headers['Content-Type'] = 'application/json'
+            kwargs['headers'] = headers
+        return self._request("POST", url, body=data, **kwargs)
+
+    def put(self, url, data=None, json=None, **kwargs):
+        r"""Sends a PUT request.
+
+        :param url: URL for the new :class:`Request` object.
+        :param data: (optional) Dictionary, list of tuples, bytes, or file-like
+            object to send in the body of the :class:`Request`.
+        :param json: (optional) json data to send in the body of the :class:`Request`.
+        :param \*\*kwargs: Optional arguments that ``request`` takes.
+        :return: :class:`Response <Response>` object
+        :rtype: requests.Response
+        """
+        if json is not None:
+            data = json_package.dumps(json).encode('utf-8')
+            headers = kwargs.get('headers', {})
+            if 'Content-Type' not in headers:
+                headers['Content-Type'] = 'application/json'
+            kwargs['headers'] = headers
+        return self._request("PUT", url, body=data, **kwargs)
 
     def patch(self, url, data=None, **kwargs):
         r"""Sends a PATCH request.
+
         :param url: URL for the new :class:`Request` object.
         :param data: (optional) Dictionary, list of tuples, bytes, or file-like
             object to send in the body of the :class:`Request`.
@@ -158,10 +139,11 @@ class HttpClient:
         :return: :class:`Response <Response>` object
         :rtype: requests.Response
         """
-        return self._request("PATCH", url, data=data, **kwargs)
+        return self._request("PATCH", url, fields=data, **kwargs)
 
     def delete(self, url, **kwargs):
         r"""Sends a DELETE request.
+
         :param url: URL for the new :class:`Request` object.
         :param \*\*kwargs: Optional arguments that ``request`` takes.
         :return: :class:`Response <Response>` object
