@@ -71,7 +71,7 @@ class TSKafka(faust.App):
     def __init__(self, *args, **kwargs):
         self.broker = kwargs['broker']
         self.kafka_producer = None
-        self.max_request_size = 10485760  # default 10M
+        self.max_request_size = kwargs.get('max_request_size', 10485760)  # default 10M
         kwargs['broker'] = ';'.join([f'kafka://{broker}' for broker in kwargs['broker'].split(',')])
         # overriding default value of 40.0 to make it bigger that the broker_session_timeout
         # see https://github.com/robinhood/faust/issues/259#issuecomment-487907514
