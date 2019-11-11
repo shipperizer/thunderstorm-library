@@ -73,6 +73,43 @@ def test_TSKafka_send_ts_event_if_send_raises_error_throw_TSKafkaSendException(
     mock_get_kafka_producer.assert_called_once()
 
 
+def test_TSKafka_send_ts_event_gets_kafka_producer_and_calls_send_with_compress(kafka_app, TestEvent):  # noqa
+    # arrange
+    test_kafka_producer = MagicMock()
+
+    data = {'int_1': 3, 'int_2': 6}
+
+    # act
+    with patch.object(
+        kafka_app, 'get_kafka_producer', return_value=test_kafka_producer
+    ) as mock_get_kafka_producer:
+        kafka_app.send_ts_event(data, TestEvent, compression=True)
+
+    # assert
+    mock_get_kafka_producer.assert_called_once()
+    assert test_kafka_producer.send.called
+
+
+def test_TSKafka_send_ts_event_if_send_raises_error_throw_TSKafkaSendException_with_compress(
+    kafka_app, TestEvent, TestException
+):
+    # arrange
+    test_kafka_producer = MagicMock()
+    test_kafka_producer.send.side_effect = TestException
+
+    data = {'int_1': 3, 'int_2': 6}
+
+    # act
+    with patch.object(
+        kafka_app, 'get_kafka_producer', return_value=test_kafka_producer
+    ) as mock_get_kafka_producer:
+        with pytest.raises(TSKafkaSendException):
+            kafka_app.send_ts_event(data, TestEvent, compression=True)
+
+    # assert
+    mock_get_kafka_producer.assert_called_once()
+
+
 def test_TSKafka_get_kafka_producer_raises_TSKafkaConnectException_if_no_real_brokers(kafka_app):  # noqa
     # act/assert
     with pytest.raises(TSKafkaConnectException):
@@ -151,3 +188,25 @@ async def test_TSKafka_ts_event_increases_metric_count_and_raises_SchemaError_fo
             await agent.put(message.copy())
 
     assert kafka_app.monitor.client.incr.called
+
+
+@pytest.mark.asyncio
+async def test_TSKafka_ts_event_with_compress(kafka_app, TestEvent):
+    import base64
+    import zlib
+    # arrange
+    data = {'int_1': 3, 'int_2': 6}
+    message = {'data': data}
+
+    # decorated agent
+    @kafka_app.ts_event(TestEvent, compression=True)
+    async def test_function(message):
+        return message
+
+    # act
+    async with test_function.test_context() as agent:
+        msg = {"data": base64.b64encode(zlib.compress(TestEvent.schema().dumps(data).encode())).decode()}
+        event = await agent.put(msg)
+
+    # assert
+    assert agent.results[event.message.offset] == message.pop('data')

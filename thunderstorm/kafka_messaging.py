@@ -1,5 +1,7 @@
+import base64
 import collections
 import logging
+import zlib
 from typing import Any
 
 import faust
@@ -127,13 +129,14 @@ class TSKafka(faust.App):
             return None
         return sentry_sdk.init(dsn=dsn, environment=environment, release=release)
 
-    def validate_data(self, data, event):
+    def validate_data(self, data, event, compression=False):
         """
         Validate message data by dumping to a string and loading it back
 
         Args:
             data (dict): Message to be serialized
             event (namedtuple): Contains topic and schema
+            compression (boolean): Whether or not to compress a message
 
         Returns:
             bytes: Serialized message
@@ -141,8 +144,14 @@ class TSKafka(faust.App):
         Raises:
             SchemaError: If message validation fails for any reason
         """
+        if compression:
+            data = base64.b64encode(zlib.compress(event.schema().dumps(data).encode())).decode()
+
         class TSMessageSchema(Schema):
-            data = fields.Nested(event.schema)
+            if compression:
+                data = fields.String(required=True)
+            else:
+                data = fields.Nested(event.schema)
             trace_id = fields.String(required=False, default=None)
 
         schema = TSMessageSchema()
@@ -182,7 +191,7 @@ class TSKafka(faust.App):
 
         return data.encode('utf-8')
 
-    def send_ts_event(self, data, event, key=None):
+    def send_ts_event(self, data, event, key=None, compression=False):
         """
         Send a message to a kafka broker. We only connect to kafka when first
         sending a message.
@@ -191,11 +200,12 @@ class TSKafka(faust.App):
             event (namedtuple): Has attributes schema and topic
             data (dict): Message you want to send via the message bus
             key (str): Key to use when routing messages to a partition - It is
+            compression (boolean): Whether or not to compress a message
             recommended you use the resource identifier so all messages relating
             to a particular resource get routed to the same partition. A value of
             None will cause messages to randomly sent to different partitions
         """
-        serialized = self.validate_data(data, event)
+        serialized = self.validate_data(data, event, compression)
         topic_name = event.topic.replace('.', '_')
 
         if not self.kafka_producer:
@@ -223,7 +233,7 @@ class TSKafka(faust.App):
         except Exception as ex:
             raise TSKafkaConnectException(f'Exception while connecting to Kafka: {ex}')
 
-    def ts_event(self, event, catch_exc=(), *args, **kwargs):
+    def ts_event(self, event, catch_exc=(), compression=False, *args, **kwargs):
         """Decorator for Thunderstorm messaging events
 
         Examples:
@@ -236,6 +246,7 @@ class TSKafka(faust.App):
             schema (marshmallow.Schema): The schema class expected by this task
             catch_exc (tuple): Tuple of exception classes which can be
                 logged as errors and then ignored
+            compression (boolean): Whether or not to compress a message
 
         Returns:
             A decorator function
@@ -249,10 +260,14 @@ class TSKafka(faust.App):
                 # stream handling done in here, no need to do it inside the func
                 async for message in stream:
                     ts_message = message.pop('data') or message
-
-                    # Marshmallow 2 compatibility - remove when no longer needed
+                    if compression:
+                        ts_message = zlib.decompress(base64.b64decode(ts_message.encode()))
+                        load_func = schema.loads
+                    else:
+                        load_func = schema.load
+                    logging.error(ts_message)
                     if MARSHMALLOW_2:
-                        deserialized_data, errors = schema.load(ts_message)
+                        deserialized_data, errors = load_func(ts_message)
                         if errors:
                             if hasattr(self.monitor, 'client'):
                                 self.monitor.client.incr(f'stream.{topic_name}.schema.errors')
@@ -261,7 +276,7 @@ class TSKafka(faust.App):
                             raise SchemaError(error_msg, errors=errors, data=ts_message)
                     else:
                         try:
-                            deserialized_data = schema.load(ts_message)
+                            deserialized_data = load_func(ts_message)
                         except ValidationError as vex:
                             if hasattr(self.monitor, 'client'):
                                 self.monitor.client.incr(f'stream.{topic_name}.schema.errors')
