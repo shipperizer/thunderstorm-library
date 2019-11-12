@@ -2,6 +2,7 @@ import base64
 import collections
 import logging
 import zlib
+import json
 from typing import Any
 
 import faust
@@ -145,7 +146,7 @@ class TSKafka(faust.App):
             SchemaError: If message validation fails for any reason
         """
         if compression:
-            data = base64.b64encode(zlib.compress(event.schema().dumps(data).encode())).decode()
+            data = self._compress(data, event.schema)
 
         class TSMessageSchema(Schema):
             if compression:
@@ -265,7 +266,6 @@ class TSKafka(faust.App):
                         load_func = schema.loads
                     else:
                         load_func = schema.load
-                    logging.error(ts_message)
                     if MARSHMALLOW_2:
                         deserialized_data, errors = load_func(ts_message)
                         if errors:
@@ -306,3 +306,12 @@ class TSKafka(faust.App):
             return self.agent(topic, name=f'thunderstorm.messaging.{ts_task_name(topic)}')(event_handler)
 
         return decorator
+
+
+    @classmethod
+    def _compress(cls, data, schema):
+        if MARSHMALLOW_2:
+            compress_data = zlib.compress(json.dumps(data).encode())
+        else:
+            compress_data = zlib.compress(schema().dumps(data).encode())
+        return base64.b64encode(compress_data).decode()

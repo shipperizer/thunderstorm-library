@@ -192,8 +192,6 @@ async def test_TSKafka_ts_event_increases_metric_count_and_raises_SchemaError_fo
 
 @pytest.mark.asyncio
 async def test_TSKafka_ts_event_with_compress(kafka_app, TestEvent):
-    import base64
-    import zlib
     # arrange
     data = {'int_1': 3, 'int_2': 6}
     message = {'data': data}
@@ -205,7 +203,7 @@ async def test_TSKafka_ts_event_with_compress(kafka_app, TestEvent):
 
     # act
     async with test_function.test_context() as agent:
-        msg = {"data": base64.b64encode(zlib.compress(TestEvent.schema().dumps(data).encode())).decode()}
+        msg = {"data": TSKafka._compress(data, TestEvent.schema)}
         event = await agent.put(msg)
 
     # assert
