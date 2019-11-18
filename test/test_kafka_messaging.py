@@ -33,7 +33,7 @@ def test_TSKafka_validate_data_returns_data(get_request_id, kafka_app, TestEvent
     validated_data = kafka_app.validate_data(data, TestEvent)
 
     # assert
-    assert json.loads(validated_data) == {'data': data, 'trace_id': 'abcd_trace_id'}
+    assert json.loads(validated_data) == {'data': data, 'trace_id': 'abcd_trace_id', "compressed": False}
 
 
 def test_TSKafka_send_ts_event_gets_kafka_producer_and_calls_send(kafka_app, TestEvent):  # noqa
@@ -197,13 +197,13 @@ async def test_TSKafka_ts_event_with_compress(kafka_app, TestEvent):
     message = {'data': data}
 
     # decorated agent
-    @kafka_app.ts_event(TestEvent, compression=True)
+    @kafka_app.ts_event(TestEvent)
     async def test_function(message):
         return message
 
     # act
     async with test_function.test_context() as agent:
-        msg = {"data": TSKafka._compress(data, TestEvent.schema)}
+        msg = {"data": TSKafka._compress(data, TestEvent.schema), "compressed": True}
         event = await agent.put(msg)
 
     # assert

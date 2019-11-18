@@ -154,13 +154,15 @@ class TSKafka(faust.App):
             else:
                 data = fields.Nested(event.schema)
             trace_id = fields.String(required=False, default=None)
+            compressed = fields.Boolean(required=False, default=False)
 
         schema = TSMessageSchema()
 
         # Marshmallow 2 compatibility - remove when no longer needed
         trace_id = get_request_id()
+        dumps_data = {'data': data, 'trace_id': trace_id, "compressed": compression}
         if MARSHMALLOW_2:
-            serialized_data, errors = schema.dumps({'data': data, 'trace_id': trace_id})
+            serialized_data, errors = schema.dumps(dumps_data)
 
             if errors:
                 error_msg = 'Error serializing queue message data.'
@@ -177,7 +179,7 @@ class TSKafka(faust.App):
                 raise SchemaError(error_msg, errors=errors, data=data)
         else:
             try:
-                data = schema.dumps({'data': data, 'trace_id': trace_id})
+                data = schema.dumps(dumps_data)
             except ValidationError as vex:
                 error_msg = 'Error serializing queue message data'
                 logging.error(error_msg, extra={'errors': vex.messages, 'data': data, 'trace_id': trace_id})
@@ -234,7 +236,7 @@ class TSKafka(faust.App):
         except Exception as ex:
             raise TSKafkaConnectException(f'Exception while connecting to Kafka: {ex}')
 
-    def ts_event(self, event, catch_exc=(), compression=False, *args, **kwargs):
+    def ts_event(self, event, catch_exc=(), *args, **kwargs):
         """Decorator for Thunderstorm messaging events
 
         Examples:
@@ -261,6 +263,7 @@ class TSKafka(faust.App):
                 # stream handling done in here, no need to do it inside the func
                 async for message in stream:
                     ts_message = message.pop('data') or message
+                    compression = message.pop('compressed', False)
                     if compression:
                         ts_message = zlib.decompress(base64.b64decode(ts_message.encode()))
                         load_func = schema.loads
