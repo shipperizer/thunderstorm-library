@@ -29,6 +29,8 @@ class TSCeleryTask(CeleryTask):
     """
     def apply_async(self, *args, **kwargs):
         kwargs.setdefault('headers', {})
+        if kwargs['headers'] is None:
+            kwargs['headers'] = {}
         kwargs['headers'][TS_REQUEST_ID] = get_request_id()
 
         return super().apply_async(*args, **kwargs)
