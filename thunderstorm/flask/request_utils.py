@@ -63,21 +63,23 @@ def get_request_pagination(params=None, exc=DeserializationError, version=1):
         KeyError: If either page or page_size are missing
         exc or DeserializationError: If there are any marshmallow validation errors
     """
+    schema = PaginationRequestSchemaV2 if version == 2 else PaginationRequestSchema
     if params:
-        return {'page': params.pop('page'), 'page_size': params.pop('page_size')} if version == 1 \
-            else {'page_num': params.pop('page_num'), 'page_size': params.pop('page_size')}
+        if version == 2:
+            return {'page_num': params.pop('page_num'), 'page_size': params.pop('page_size')}
+        return {'page': params.pop('page'), 'page_size': params.pop('page_size')}
 
     params = request.args
 
     # TODO: @will-norris backwards compat - remove
     if MARSHMALLOW_2:
-        data, errors = PaginationRequestSchema().load(params) if version == 1 else PaginationRequestSchemaV2().load(params)
+        data, errors = schema().load(params)
         if errors:
             raise exc('Error deserializing pagination options: {}'.format(errors))
         return data
     else:
         try:
-            return PaginationRequestSchema().load(params) if version == 1 else PaginationRequestSchemaV2().load(params)
+            return schema().load(params)
         except ValidationError as vex:
             raise exc('Error deserializing pagination options: {}'.format(vex.messages))
 
