@@ -4,7 +4,6 @@ import binascii
 
 class Metronome(object):
     """
-    节拍器
     """
 
     def __init__(self, tick_time, beat_times_every_day):
