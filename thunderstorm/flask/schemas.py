@@ -40,3 +40,25 @@ class HttpErrorResponseSchema(Schema):
     message = fields.String(
         description='Description of the error happened during the response')
     code = fields.Integer(description='HTTP code of the response')
+
+
+class PaginationRequestSchemaV2(Schema):
+    """
+    Validate pagination params on listing endpoints. version 2
+    """
+    page_num = fields.Integer(
+        validate=Range(min=1), missing=1, description='Page number, minimum value is 1, defaults to 1.'
+    )
+    page_size = fields.Integer(
+        validate=Range(min=1, max=1000),
+        missing=20,
+        description='Number of resources per page to display in the result. Defaults to 20'
+    )
+
+
+class PaginationSchemaV2(PaginationRequestSchemaV2):
+    """
+    Schema for describing the structure of the dict containing pagination info. Version 2
+    """
+    items = fields.Integer(required=True, dump_only=True, description='Total number of entries')
+    total_page = fields.Integer(required=True, dump_only=True, description='Total number of pages')

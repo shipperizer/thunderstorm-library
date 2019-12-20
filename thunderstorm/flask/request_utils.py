@@ -1,10 +1,11 @@
+import math
 from urllib.parse import urlparse
 
 from flask import request
 from marshmallow.exceptions import ValidationError
 
 from thunderstorm.flask.exceptions import DeserializationError, SerializationError
-from thunderstorm.flask.schemas import PaginationRequestSchema
+from thunderstorm.flask.schemas import PaginationRequestSchema, PaginationRequestSchemaV2
 
 import marshmallow  # TODO: @will-norris backwards compat - remove
 MARSHMALLOW_2 = int(marshmallow.__version__[0]) < 3
@@ -47,7 +48,7 @@ def make_paginated_response(query, url_path, schema, page, page_size, ceiling=No
             raise SerializationError(('Error serializing pagination info: {}'.format(vex.messages)))
 
 
-def get_request_pagination(params=None, exc=DeserializationError):
+def get_request_pagination(params=None, exc=DeserializationError, version=1):
     """
     Get pagination params from a dict. Modifies the dict passed to it.
     If no params are provided it falls back to using flask's request.args
@@ -56,25 +57,29 @@ def get_request_pagination(params=None, exc=DeserializationError):
         params (dict): Dictionary that must contain page and page_size keys
         exc (Exception subclass): Custom exception to raise if validation of
             query params fails, falls back to DeserializationError if none is provided
+        version (int): the version of paginating
 
     Raises:
         KeyError: If either page or page_size are missing
         exc or DeserializationError: If there are any marshmallow validation errors
     """
+    schema = PaginationRequestSchemaV2 if version == 2 else PaginationRequestSchema
     if params:
+        if version == 2:
+            return {'page_num': params.pop('page_num'), 'page_size': params.pop('page_size')}
         return {'page': params.pop('page'), 'page_size': params.pop('page_size')}
 
     params = request.args
 
     # TODO: @will-norris backwards compat - remove
     if MARSHMALLOW_2:
-        data, errors = PaginationRequestSchema().load(params)
+        data, errors = schema().load(params)
         if errors:
             raise exc('Error deserializing pagination options: {}'.format(errors))
         return data
     else:
         try:
-            return PaginationRequestSchema().load(params)
+            return schema().load(params)
         except ValidationError as vex:
             raise exc('Error deserializing pagination options: {}'.format(vex.messages))
 
@@ -127,7 +132,7 @@ def _strip_query(url_path):
     return query
 
 
-def get_pagination_info(page, page_size, num_records, url_path, ceiling=None):
+def get_pagination_info(page, page_size, num_records, url_path='', ceiling=None, version=1):
     """
     Utility function for creating a dict of pagination information.
 
@@ -137,6 +142,8 @@ def get_pagination_info(page, page_size, num_records, url_path, ceiling=None):
         num_records (int): Total number of records in the db for the given query
         url_path (str): Path of the URL the request was made to
         ceiling (int): Limit to the count query
+        version (int): the version of paginate, default is 1
+
 
     Returns:
         dict: Dict containining pagination information. The structure of this
@@ -162,6 +169,18 @@ def get_pagination_info(page, page_size, num_records, url_path, ceiling=None):
     else:
         base_url = '{}?page_size={}'.format(url_path, page_size)
 
+    if version == 2:
+        total_page = math.ceil(num_records / page_size)
+        pagination_info = {
+            'pageInfo':
+                {
+                    'items': num_records,
+                    'page_num': page,
+                    'page_size': page_size,
+                    'total_page': total_page
+                }
+        }
+        return pagination_info
     if next_page:
         pagination_info['next_page'] = '{}&page={}'.format(base_url, next_page)
     if prev_page:
@@ -173,7 +192,7 @@ def get_pagination_info(page, page_size, num_records, url_path, ceiling=None):
 
 
 # TODO: @will-norris Deprecate in favour of make_paginated_response
-def paginate(query, page, page_size, url_path, ceiling=None):
+def paginate(query, page, page_size, url_path='', ceiling=None, version=1):
     """
     Take a sqlalchemy query and paginate it based on the args provided.
 
@@ -185,6 +204,7 @@ def paginate(query, page, page_size, url_path, ceiling=None):
             'http://localhost/foo/bar/baz/' it would be '/foo/bar/baz'.
             Query parameters are stripped out by the get_pagination_info func.
         ceiling (int): Limit to the count query
+        version (int): the version of paginate, default is 1
 
     Returns:
         tuple: (Paginated Query object applied to it, dict of pagination info)
@@ -192,6 +212,6 @@ def paginate(query, page, page_size, url_path, ceiling=None):
     start = (page - 1) * page_size
     num_records = query.limit(ceiling).count() if ceiling else query.count()
 
-    pagination_info = get_pagination_info(page, page_size, num_records, url_path, ceiling=ceiling)
+    pagination_info = get_pagination_info(page, page_size, num_records, url_path, ceiling=ceiling, version=version)
 
     return query.offset(start).limit(page_size), pagination_info
