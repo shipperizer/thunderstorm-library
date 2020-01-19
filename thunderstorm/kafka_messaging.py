@@ -11,6 +11,7 @@ from faust.sensors.monitor import Monitor
 from faust.sensors.statsd import StatsdMonitor
 from faust.types import StreamT, TP, Message
 from kafka import KafkaProducer
+from kafka.errors import MessageSizeTooLargeError
 from marshmallow import Schema, fields
 from marshmallow.exceptions import ValidationError
 from thunderstorm.logging import get_request_id
@@ -24,6 +25,10 @@ MARSHMALLOW_2 = int(marshmallow.__version__[0]) < 3
 
 # Keep topic names and schemas together
 Event = collections.namedtuple('Event', ['topic', 'schema'])
+
+
+class TSMessageSizeTooLargeError(MessageSizeTooLargeError):
+    pass
 
 
 class TSKafkaSendException(Exception):
@@ -218,6 +223,12 @@ class TSKafka(faust.App):
             self.kafka_producer.send(event.topic, value=serialized, key=key)  # send takes raw bytes
             if hasattr(self.monitor, 'client'):
                 self.monitor.client.incr(f'stream.{topic_name}.messages.sent')
+        except MessageSizeTooLargeError as msex:
+            raise TSMessageSizeTooLargeError(
+                f"The message is bytes when serialized which is larger than"
+                f" the total memory buffer you have configured with the"
+                f" buffer_memory configuration. {msex}"
+            )
         except Exception as ex:
             raise TSKafkaSendException(f'Exception while pushing message to broker: {ex}')
 
