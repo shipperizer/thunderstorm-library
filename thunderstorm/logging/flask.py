@@ -64,7 +64,6 @@ def init_app(
     del flask_app.logger.handlers[:]
     flask_app.logger.name = ts_service
     flask_app.logger.setLevel(log_level)
-    flask_app.logger.addHandler(stream_handler)
 
     logger = setup_ts_logger(ts_service, log_level, log_filter)
     if add_json_handler:
@@ -73,6 +72,8 @@ def init_app(
         )
         logger.addHandler(json_handler)
         flask_app.logger.addHandler(json_handler)
+    else:
+        flask_app.logger.addHandler(stream_handler)
 
     @flask_app.before_request
     def before_request():

@@ -1,0 +1,10 @@
+FROM 886366864302.dkr.ecr.eu-west-1.amazonaws.com/artsalliancemedia/python:3.6-slim
+
+WORKDIR /src/thunderstorm_library
+
+COPY . .
+
+RUN pip install --pre -e ".[kafka]"
+RUN pip install -r requirements-dev.txt
+
+CMD "pytest -s test"

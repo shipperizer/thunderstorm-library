@@ -115,12 +115,13 @@ class TSKafka(faust.App):
             }
 
             log_filter = KafkaRequestIDFilter()
-            kwargs['loghandlers'] = [ts_stream_handler(log_filter)]
             add_json_handler = kwargs.get('add_json_handler', False)
             if add_json_handler:
-                kwargs['loghandlers'].append(
+                kwargs['loghandlers'] = [
                     ts_json_handler('kafka', ts_service, log_filter)
-                )
+                ]
+            else:
+                kwargs['loghandlers'] = [ts_stream_handler(log_filter)]
 
         # sentry config
         dsn, environment, release = [

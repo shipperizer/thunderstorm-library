@@ -19,7 +19,7 @@ compat:
 lint:
 	flake8 thunderstorm test
 
-test: lint
+test: install lint
 	pytest \
 		-vv \
 		--cov thunderstorm \

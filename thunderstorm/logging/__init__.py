@@ -85,18 +85,20 @@ def ts_stream_handler(ts_filter):
         logging.Formatter(TS_LOGGER_FORMAT_STR)
     )
     stream_handler.addFilter(ts_filter)
-
     return stream_handler
 
 
-def setup_ts_logger(ts_service, log_level, log_filter):
+def setup_ts_logger(ts_service, log_level, log_filter, json_handler):
     logger = logging.getLogger(ts_service)
     logger.propagate = True
 
     logger.setLevel(log_level)
-    logger.addHandler(
-        ts_stream_handler(log_filter)
-    )
+    if json_handler:
+        logger.addHandler(json_handler)
+    else:
+        logger.addHandler(
+            ts_stream_handler(log_filter)
+        )
 
     return logger
 
