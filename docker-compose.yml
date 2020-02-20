@@ -2,7 +2,7 @@ version: '2'
 
 services:
   python36:
-    image: artsalliancemedia/thunderstorm-auth-lib:develop
+    image: artsalliancemedia/thunderstorm-library:develop
     build:
       dockerfile: Dockerfile.dev
       context: .
