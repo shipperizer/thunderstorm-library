@@ -72,17 +72,19 @@ def init_app(
     log_level = get_log_level(celery_app.conf['TS_LOG_LEVEL'])
 
     log_filter = CeleryTaskFilter()
-    json_handler = ts_json_handler('celery', ts_service, log_filter) if add_json_handler else None
     if init_ts_logger:
-        logger = setup_ts_logger(ts_service, log_level, log_filter, json_handler)
+        logger = setup_ts_logger(ts_service, log_level)
         if add_json_handler:
-            logger.addHandler(json_handler)
+            logger.addHandler(ts_json_handler('celery', ts_service, log_filter))
+        else:
+            logger.addHandler(ts_stream_handler(log_filter))
 
         logger.info('setting up ts_logger')
 
     def _setup_logger():
         def do_setup_logging(**kwargs):
             stream_handler = ts_stream_handler(log_filter)
+            json_handler = ts_json_handler('celery', ts_service, log_filter) if add_json_handler else None
 
             del celery.utils.log.task_logger.handlers[:]
             del celery.utils.log.worker_logger.handlers[:]
