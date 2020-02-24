@@ -73,7 +73,7 @@ def init_app(
         logger.addHandler(json_handler)
     else:
         logger.addHandler(stream_handler)
-        flask_app.logger = logger
+    flask_app.logger = logger
 
     @flask_app.before_request
     def before_request():
